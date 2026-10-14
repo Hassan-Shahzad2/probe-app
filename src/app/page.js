@@ -168,6 +168,8 @@ function UploadDemo() {
   const [browseHot, setBrowseHot] = useState(false);
   const [roleHot, setRoleHot] = useState(false);
   const [startHot, setStartHot] = useState(false);
+  const [jobIdx, setJobIdx] = useState(0);
+  const jobs = ["Frontend Engineer", "Backend Engineer", "Data Analyst", "Product Designer", "DevOps Engineer", "Mobile Developer"];
 
   useEffect(() => {
     if (reduce) { setFileIn(true); return; }
@@ -193,7 +195,9 @@ function UploadDemo() {
         setFileIn(true);
         await wait(650); if (cancelled) break;
         await moveTo(roleRef.current); if (cancelled) break;
-        setRoleHot(true); await wait(650); if (cancelled) break; setRoleHot(false);
+        setRoleHot(true);
+        for (let k = 0; k < 5; k++) { setJobIdx((j) => (j + 1) % jobs.length); await wait(170); if (cancelled) break; }
+        await wait(450); if (cancelled) break; setRoleHot(false);
         await moveTo(startRef.current); if (cancelled) break;
         setStartHot(true); await wait(260); setStartHot(false);
         await wait(1100);
@@ -221,7 +225,7 @@ function UploadDemo() {
         </AnimatePresence>
       </div>
       <div ref={roleRef} className={`mt-1 flex items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors ${roleHot ? "border-accent text-ink" : "border-line text-muted"}`}>
-        Frontend Engineer <span className="text-faint">▾</span>
+        {jobs[jobIdx]} <span className="text-faint">▾</span>
       </div>
       <motion.button ref={startRef} animate={{ scale: startHot ? 0.96 : 1 }} transition={{ duration: 0.15 }} className="mt-4 w-full rounded-lg bg-accent py-2.5 text-sm font-semibold text-accent-ink">
         Start interview
@@ -348,7 +352,7 @@ function DashboardDemo() {
   const cx = useMotionValue(0);
   const cy = useMotionValue(0);
   const [hover, setHover] = useState(-1);
-  const rows = [["Ayesha Khan", 81, "Qualified"], ["Bilal Ahmed", 66, "Review"], ["Sana Iqbal", 74, "Qualified"]];
+  const rows = [["Ayesha Khan", 81, "Qualified", 5], ["Bilal Ahmed", 66, "Review", 12], ["Sana Iqbal", 74, "Qualified", 32]];
 
   useEffect(() => {
     if (reduce) return;
@@ -385,12 +389,11 @@ function DashboardDemo() {
         <span className="text-xs text-faint">Frontend Engineer</span>
       </div>
       <div className="mt-4 space-y-2.5">
-        {rows.map(([name, score, tag], i) => (
+        {rows.map(([name, score, tag, av], i) => (
           <div key={name} ref={(el) => (rowRefs.current[i] = el)}
             className={`flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors ${hover === i ? "bg-accent-soft ring-1 ring-accent/40" : "bg-card2"}`}>
-            <span className="grid h-8 w-8 place-items-center rounded-full bg-accent/15 text-xs font-semibold text-accent">
-              {String(name).split(" ").map((w) => w[0]).join("")}
-            </span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={`https://i.pravatar.cc/64?img=${av}`} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
             <span className="flex-1 text-sm text-ink">{name}</span>
             <span className="font-serif text-sm font-semibold text-ink">{score}</span>
             <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${tag === "Qualified" ? "bg-accent/15 text-accent" : "bg-pend/15 text-pend"}`}>{tag}</span>
@@ -414,7 +417,7 @@ export default function Home() {
   return (
     <main className="relative flex-1 overflow-hidden">
       {/* drifting background glows */}
-      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
+      <div aria-hidden className="glow-layer pointer-events-none absolute inset-0 -z-10">
         <motion.div
           className="absolute -top-24 right-[-6rem] h-[34rem] w-[34rem] rounded-full blur-3xl"
           style={{ background: "radial-gradient(circle, color-mix(in oklab, var(--accent) 30%, transparent), transparent 70%)" }}
@@ -497,11 +500,7 @@ export default function Home() {
             </motion.svg>
           ))}
 
-          <motion.div
-            className="glass rounded-3xl p-6"
-            animate={reduce ? {} : { y: [0, -10, 0] }}
-            transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
-          >
+          <motion.div className="glass rounded-3xl p-6">
             <div className="flex items-center justify-between">
               <span className="inline-flex items-center gap-2 text-sm font-medium text-ink">
                 <Waveform bars={5} /> In session
@@ -549,8 +548,8 @@ export default function Home() {
 
       {/* how it works — a playing demo screen per step */}
       <section id="how" className="mx-auto max-w-6xl px-6 py-20">
-        <h2 className="font-serif text-[clamp(28px,3.4vw,40px)] font-medium text-ink">How a screening runs</h2>
-        <p className="mt-3 max-w-md text-lg text-muted">Four steps, from résumé to a ranked verdict.</p>
+        <h2 className="text-center font-serif text-[clamp(34px,4.6vw,56px)] font-semibold text-ink">How a screening runs</h2>
+        <p className="mx-auto mt-4 max-w-lg text-center text-lg text-muted">Four steps, from résumé to a ranked verdict.</p>
 
         <div className="mt-16 space-y-20 lg:space-y-28">
           {[
@@ -569,9 +568,9 @@ export default function Home() {
                   viewport={{ once: true, margin: "-80px" }}
                   transition={{ duration: 0.6, ease }}
                 >
-                  <span className="text-sm font-semibold text-accent">Step {s.n}</span>
-                  <h3 className="mt-2 font-serif text-3xl font-semibold text-ink">{s.t}</h3>
-                  <p className="mt-3 max-w-md text-lg text-muted">{s.d}</p>
+                  <span className="text-base font-semibold text-accent">Step {s.n}</span>
+                  <h3 className="mt-2 font-serif text-[clamp(32px,3.2vw,46px)] font-semibold leading-tight text-ink">{s.t}</h3>
+                  <p className="mt-4 max-w-md text-xl text-muted">{s.d}</p>
                 </motion.div>
                 <motion.div
                   className={flip ? "lg:order-1" : ""}
