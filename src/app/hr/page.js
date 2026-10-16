@@ -166,7 +166,7 @@ function CandidateCard({ iv }) {
 
           {cv && (
             <details className="mt-3 rounded-xl border border-line bg-card2 p-4">
-              <summary className="cursor-pointer text-sm font-medium text-ink">View candidate résumé</summary>
+              <summary className="cursor-pointer text-sm font-medium text-ink">View candidate resume</summary>
               <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap text-xs leading-relaxed text-muted">{cv}</pre>
             </details>
           )}
@@ -266,6 +266,21 @@ export default function HRPage() {
     ["failed", "Not qualified", stats.fail],
     ["pending", "In progress", stats.pend],
   ];
+
+  if (auth.status === "denied") {
+    return (
+      <main className="grid min-h-screen place-items-center px-6">
+        <div className="glass max-w-md rounded-3xl p-8 text-center">
+          <h1 className="font-serif text-2xl font-semibold text-ink">Access denied</h1>
+          <p className="mt-2 text-muted">This is the recruiter area. Your account doesn't have recruiter access.</p>
+          <div className="mt-6 flex justify-center gap-3">
+            <button onClick={() => router.replace(auth.role === "admin" ? "/admin" : "/login")} className="rounded-xl bg-accent px-5 py-2.5 font-semibold text-accent-ink transition hover:brightness-110">Go to your area</button>
+            <button onClick={logout} className="rounded-xl border border-line px-5 py-2.5 font-medium text-ink transition hover:border-accent">Log out</button>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   if (auth.status !== "ready") {
     return (

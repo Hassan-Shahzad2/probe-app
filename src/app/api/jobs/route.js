@@ -1,15 +1,21 @@
-const BASE = process.env.N8N_WEBHOOK_BASE;
+import { createClient } from "@supabase/supabase-js";
+
+// Jobs now come straight from Supabase (so the new time_limit_minutes field flows
+// through to the candidate screen). n8n still handles the interview itself.
+const admin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY
+);
 
 export async function GET() {
   try {
-    const r = await fetch(`${BASE}/list-jobs`, {
-      headers: { "ngrok-skip-browser-warning": "true" },
-      cache: "no-store",
-    });
-    let raw = await r.text();
-    if (raw.startsWith("=")) raw = raw.slice(1);
-    return new Response(raw, { status: 200, headers: { "Content-Type": "application/json" } });
+    const { data, error } = await admin
+      .from("jobs")
+      .select("id,title,description,num_questions,time_limit_minutes")
+      .order("title", { ascending: true });
+    if (error) return Response.json({ error: error.message }, { status: 500 });
+    return Response.json(data || []);
   } catch (e) {
-    return Response.json({ error: "Could not reach the interview service." }, { status: 502 });
+    return Response.json({ error: "Could not load roles." }, { status: 502 });
   }
 }

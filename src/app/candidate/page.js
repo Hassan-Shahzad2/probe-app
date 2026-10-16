@@ -85,6 +85,7 @@ export default function CandidatePage() {
   const [totalQ, setTotalQ] = useState(0);
   const totalQRef = useRef(0);
   const askedRef = useRef(0);
+  const timeLimitRef = useRef(null); // admin-set minutes for the selected role (null = auto)
   const [speaking, setSpeaking] = useState(false);
   const [mic, setMic] = useState("idle"); // idle|disabled|ready|listening|processing
   const micRef = useRef("idle");
@@ -111,6 +112,7 @@ export default function CandidatePage() {
   const screenRecRef = useRef(null);
   const camChunksRef = useRef([]);
   const screenChunksRef = useRef([]);
+  const screenAudioCtxRef = useRef(null);
 
   function setMicState(v) { micRef.current = v; setMic(v); }
 
@@ -138,6 +140,7 @@ export default function CandidatePage() {
   }, [phase, camOk]);
 
   useEffect(() => () => {
+    endedRef.current = true; // stop the interview loop if the candidate leaves mid-way
     try { window.speechSynthesis.cancel(); } catch {}
     isRecordingRef.current = false;
     try { recRef.current && recRef.current.stop(); } catch {}
@@ -146,6 +149,7 @@ export default function CandidatePage() {
     if (silenceRef.current) clearTimeout(silenceRef.current);
     try { camStreamRef.current && camStreamRef.current.getTracks().forEach((t) => t.stop()); } catch {}
     try { screenStreamRef.current && screenStreamRef.current.getTracks().forEach((t) => t.stop()); } catch {}
+    try { screenAudioCtxRef.current && screenAudioCtxRef.current.close(); } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -153,9 +157,8 @@ export default function CandidatePage() {
   async function requestCam() {
     try {
       const s = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      // release the mic track so the speech recogniser can own the microphone;
-      // the permission stays granted and we keep the video for preview + recording.
-      s.getAudioTracks().forEach((t) => t.stop());
+      // keep BOTH video and audio: the audio is recorded for proctoring (to verify
+      // no outside / AI help). SpeechRecognition uses its own mic access independently.
       camStreamRef.current = s;
       setCamOk(true);
       setPermErr("");
@@ -168,7 +171,7 @@ export default function CandidatePage() {
 
   async function requestScreen() {
     try {
-      const s = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      const s = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
       screenStreamRef.current = s;
       setScreenOk(true);
       setPermErr("");
@@ -182,7 +185,7 @@ export default function CandidatePage() {
 
   /* ----- proctoring recording ----- */
   function recorderMime() {
-    const types = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"];
+    const types = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"];
     for (const t of types) {
       try { if (window.MediaRecorder && MediaRecorder.isTypeSupported(t)) return t; } catch {}
     }
@@ -199,9 +202,31 @@ export default function CandidatePage() {
     ref.current = rec;
     try { rec.start(1000); } catch {} // flush a chunk every second
   }
+  // screen recording = screen video + (system audio AI voice + candidate mic), mixed.
+  function buildScreenRecordStream() {
+    const screen = screenStreamRef.current;
+    if (!screen) return null;
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      const sysAudio = screen.getAudioTracks();
+      const micAudio = camStreamRef.current ? camStreamRef.current.getAudioTracks() : [];
+      if (!AC || (!sysAudio.length && !micAudio.length)) return screen; // nothing to mix
+      const ac = new AC();
+      screenAudioCtxRef.current = ac;
+      const dest = ac.createMediaStreamDestination();
+      if (sysAudio.length) { try { ac.createMediaStreamSource(new MediaStream([sysAudio[0]])).connect(dest); } catch {} }
+      if (micAudio.length) { try { ac.createMediaStreamSource(new MediaStream([micAudio[0]])).connect(dest); } catch {} }
+      const out = new MediaStream();
+      screen.getVideoTracks().forEach((t) => out.addTrack(t));
+      dest.stream.getAudioTracks().forEach((t) => out.addTrack(t));
+      return out;
+    } catch {
+      return screen;
+    }
+  }
   function startRecorders() {
     startOneRecorder(camStreamRef.current, camRecRef, camChunksRef);
-    startOneRecorder(screenStreamRef.current, screenRecRef, screenChunksRef);
+    startOneRecorder(buildScreenRecordStream(), screenRecRef, screenChunksRef);
   }
   function stopOneRecorder(rec) {
     return new Promise((resolve) => {
@@ -323,7 +348,7 @@ export default function CandidatePage() {
 
   /* ----- overall timer ----- */
   function startOverallTimer(numQ) {
-    const total = Math.max(60, numQ * 120);
+    const total = timeLimitRef.current ? Math.max(60, timeLimitRef.current * 60) : Math.max(60, numQ * 120);
     setOverallLeft(total);
     let left = total;
     overallTickRef.current = setInterval(() => {
@@ -355,6 +380,7 @@ export default function CandidatePage() {
     await stopRecordersAndUpload();
     try { camStreamRef.current && camStreamRef.current.getTracks().forEach((t) => t.stop()); } catch {}
     try { screenStreamRef.current && screenStreamRef.current.getTracks().forEach((t) => t.stop()); } catch {}
+    try { screenAudioCtxRef.current && screenAudioCtxRef.current.close(); } catch {}
   }
   async function timeUp() {
     if (endedRef.current) return;
@@ -414,6 +440,7 @@ export default function CandidatePage() {
     setTotalQ(numQ);
     totalQRef.current = numQ;
     askedRef.current = 0;
+    timeLimitRef.current = job && job.time_limit_minutes ? Number(job.time_limit_minutes) : null;
     setUploading(true);
     setFormErr("");
 
