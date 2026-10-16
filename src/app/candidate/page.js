@@ -106,6 +106,12 @@ export default function CandidatePage() {
   const finalRef = useRef("");
   const submittingRef = useRef(false);
 
+  // proctoring recorders (video only — the mic is owned by SpeechRecognition)
+  const camRecRef = useRef(null);
+  const screenRecRef = useRef(null);
+  const camChunksRef = useRef([]);
+  const screenChunksRef = useRef([]);
+
   function setMicState(v) { micRef.current = v; setMic(v); }
 
   useEffect(() => {
@@ -174,9 +180,55 @@ export default function CandidatePage() {
     }
   }
 
+  /* ----- proctoring recording ----- */
+  function recorderMime() {
+    const types = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"];
+    for (const t of types) {
+      try { if (window.MediaRecorder && MediaRecorder.isTypeSupported(t)) return t; } catch {}
+    }
+    return "";
+  }
+  function startOneRecorder(stream, ref, chunksRef) {
+    if (!stream) return;
+    chunksRef.current = [];
+    let rec;
+    const mime = recorderMime();
+    try { rec = mime ? new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 1000000 }) : new MediaRecorder(stream); }
+    catch { try { rec = new MediaRecorder(stream); } catch { return; } }
+    rec.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunksRef.current.push(e.data); };
+    ref.current = rec;
+    try { rec.start(1000); } catch {} // flush a chunk every second
+  }
+  function startRecorders() {
+    startOneRecorder(camStreamRef.current, camRecRef, camChunksRef);
+    startOneRecorder(screenStreamRef.current, screenRecRef, screenChunksRef);
+  }
+  function stopOneRecorder(rec) {
+    return new Promise((resolve) => {
+      if (!rec || rec.state === "inactive") return resolve();
+      rec.onstop = () => resolve();
+      try { rec.stop(); } catch { resolve(); }
+    });
+  }
+  async function uploadOne(kind, chunksRef) {
+    const chunks = chunksRef.current || [];
+    if (!chunks.length || !interviewIdRef.current) return;
+    const blob = new Blob(chunks, { type: "video/webm" });
+    const fd = new FormData();
+    fd.append("file", blob, kind + ".webm");
+    fd.append("interview_id", interviewIdRef.current);
+    fd.append("kind", kind);
+    try { await fetch("/api/upload-recording", { method: "POST", body: fd }); } catch {}
+  }
+  async function stopRecordersAndUpload() {
+    try { await Promise.all([stopOneRecorder(camRecRef.current), stopOneRecorder(screenRecRef.current)]); } catch {}
+    try { await Promise.all([uploadOne("camera", camChunksRef), uploadOne("screen", screenChunksRef)]); } catch {}
+  }
+
   function proceedToInterview() {
     if (!(camOk && screenOk)) return;
     setPhase("interview");
+    startRecorders();
     startOverallTimer(totalQRef.current);
     startInterview();
   }
@@ -300,6 +352,7 @@ export default function CandidatePage() {
     await speak(message.spoken);
     setSpeaking(false);
     setPhase("done");
+    await stopRecordersAndUpload();
     try { camStreamRef.current && camStreamRef.current.getTracks().forEach((t) => t.stop()); } catch {}
     try { screenStreamRef.current && screenStreamRef.current.getTracks().forEach((t) => t.stop()); } catch {}
   }

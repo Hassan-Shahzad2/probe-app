@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "motion/react";
+import { supabase } from "@/lib/supabaseClient";
+import { useRequireRole } from "@/lib/useAuth";
 
 const PASS_MARK = 70;
 
@@ -81,6 +84,33 @@ function Bars({ avg }) {
   );
 }
 
+function Recording({ interviewId }) {
+  const SB = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const [camErr, setCamErr] = useState(false);
+  const [scrErr, setScrErr] = useState(false);
+  if (!SB || !interviewId || (camErr && scrErr)) return null;
+  const url = (kind) => `${SB}/storage/v1/object/public/recordings/${interviewId}/${kind}.webm`;
+  return (
+    <div className="mt-3">
+      <div className="mb-2 text-xs font-medium text-faint">Proctoring recording</div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {!camErr && (
+          <div className="rounded-xl border border-line bg-card2 p-2">
+            <div className="mb-1.5 px-1 text-xs text-muted">Camera</div>
+            <video src={url("camera")} controls playsInline onError={() => setCamErr(true)} className="w-full rounded-lg bg-black" />
+          </div>
+        )}
+        {!scrErr && (
+          <div className="rounded-xl border border-line bg-card2 p-2">
+            <div className="mb-1.5 px-1 text-xs text-muted">Screen</div>
+            <video src={url("screen")} controls playsInline onError={() => setScrErr(true)} className="w-full rounded-lg bg-black" />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function CandidateCard({ iv }) {
   const [open, setOpen] = useState(false);
   const report = getReport(iv);
@@ -141,6 +171,8 @@ function CandidateCard({ iv }) {
             </details>
           )}
 
+          <Recording interviewId={iv.id} />
+
           {turns.length > 0 && (
             <div className="mt-3">
               <div className="mb-2 text-xs font-medium text-faint">Interview transcript</div>
@@ -169,6 +201,13 @@ export default function HRPage() {
   const [err, setErr] = useState("");
   const [filter, setFilter] = useState("all");
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
+  const auth = useRequireRole("hr");
+
+  async function logout() {
+    await supabase.auth.signOut();
+    router.replace("/login");
+  }
 
   async function load() {
     setLoading(true);
@@ -228,6 +267,14 @@ export default function HRPage() {
     ["pending", "In progress", stats.pend],
   ];
 
+  if (auth.status !== "ready") {
+    return (
+      <main className="grid min-h-screen place-items-center">
+        <p className="text-muted">Checking access…</p>
+      </main>
+    );
+  }
+
   return (
     <main className="relative flex min-h-screen flex-col">
       <header className="mx-auto flex w-full max-w-5xl items-center justify-between px-6 py-6">
@@ -240,7 +287,7 @@ export default function HRPage() {
         </Link>
         <div className="flex items-center gap-3">
           <button onClick={load} className="glass rounded-lg px-3 py-2 text-sm font-medium text-ink transition hover:brightness-105">Refresh</button>
-          <Link href="/" className="text-sm text-muted transition hover:text-ink">Exit</Link>
+          <button onClick={logout} className="text-sm text-muted transition hover:text-ink">Log out</button>
         </div>
       </header>
 
