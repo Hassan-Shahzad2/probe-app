@@ -2,7 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { motion, AnimatePresence, useReducedMotion, useMotionValue, useTransform, animate } from "motion/react";
+
+// Lottie player — loaded client-side only (it touches the DOM).
+const Lottie = dynamic(() => import("lottie-react").then((m) => m.default), { ssr: false });
 
 const ease = [0.22, 1, 0.36, 1];
 
@@ -26,11 +30,49 @@ function Waveform({ bars = 5 }) {
   );
 }
 
+/* The hero signal — a tall live waveform that reads as "listening". */
+function LiveWaveform({ bars = 40 }) {
+  const reduce = useReducedMotion();
+  const base = useRef(
+    Array.from({ length: bars }, (_, i) =>
+      0.22 + 0.72 * Math.abs(Math.sin(i * 0.55) * 0.7 + Math.sin(i * 0.17) * 0.5)
+    )
+  );
+  return (
+    <div className="flex h-24 items-center justify-center gap-[3px] sm:gap-1" aria-hidden>
+      {base.current.map((h, i) => (
+        <motion.span
+          key={i}
+          className="w-[3px] rounded-full bg-gradient-to-t from-accent to-accent-bright sm:w-1"
+          style={{ height: `${Math.max(8, h * 100)}%`, originY: 1 }}
+          animate={reduce ? {} : { scaleY: [0.3, 1, 0.45, 0.8, 0.35] }}
+          transition={{
+            duration: 1.7 + (i % 6) * 0.18,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: i * 0.028,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function MicMark({ size = 24 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden className="text-accent">
+      <rect x="9" y="2.5" width="6" height="11" rx="3" fill="currentColor" />
+      <path d="M6.5 11a5.5 5.5 0 0 0 11 0" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" fill="none" />
+      <path d="M12 16.5V21M8.5 21h7" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function Logo() {
   return (
     <span className="inline-flex items-center gap-2.5">
-      <Waveform bars={4} />
-      <b className="font-serif text-[22px] font-semibold tracking-tight text-ink">Probe</b>
+      <MicMark />
+      <b className="font-serif text-[26px] font-semibold tracking-tight text-ink">Probe</b>
     </span>
   );
 }
@@ -111,12 +153,12 @@ function ScoreRing({ value = 75 }) {
         <motion.circle
           cx="44" cy="44" r={r} fill="none" stroke="url(#ringGrad)" strokeWidth="7" strokeLinecap="round"
           strokeDasharray={c}
-          style={{ filter: "drop-shadow(0 0 7px rgba(91,141,242,0.55))" }}
+          style={{ filter: "drop-shadow(0 0 7px rgba(30,203,195,0.5))" }}
           animate={reduce ? { strokeDashoffset: offset } : { strokeDashoffset: [c, offset, offset, c] }}
           transition={reduce ? {} : { duration: 4.2, times: [0, 0.38, 0.72, 1], repeat: Infinity, ease: "easeInOut" }}
         />
       </svg>
-      <motion.span className="absolute font-serif text-2xl font-semibold text-ink">{rounded}</motion.span>
+      <motion.span className="tnum absolute font-serif text-[26px] font-normal text-ink">{rounded}</motion.span>
     </div>
   );
 }
@@ -134,7 +176,7 @@ function centerIn(bodyEl, el) {
 function Cursor({ cx, cy }) {
   return (
     <motion.div style={{ x: cx, y: cy }} className="pointer-events-none absolute left-0 top-0 z-20">
-      <svg width="22" height="22" viewBox="0 0 24 24" className="drop-shadow-[0_2px_3px_rgba(0,0,0,0.35)]" fill="#0E1B32" stroke="#ffffff" strokeWidth="1.4">
+      <svg width="22" height="22" viewBox="0 0 24 24" className="drop-shadow-[0_2px_3px_rgba(0,0,0,0.35)]" fill="#0C1A1C" stroke="#ffffff" strokeWidth="1.4">
         <path d="M5 3l14 7-6 2-2 6z" />
       </svg>
     </motion.div>
@@ -144,7 +186,10 @@ function Cursor({ cx, cy }) {
 function Device({ children, innerRef }) {
   return (
     <div className="mx-auto w-full max-w-[400px] rounded-[1.8rem] bg-gradient-to-b from-slate-700 to-slate-950 p-3 shadow-2xl shadow-slate-950/50 ring-1 ring-white/10">
-      <div className="mx-auto mb-2.5 h-1 w-10 rounded-full bg-white/20" />
+      <div className="mx-auto mb-2.5 flex items-center justify-center gap-1.5">
+        <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)]" />
+        <span className="h-1 w-8 rounded-full bg-white/20" />
+      </div>
       <div
         data-theme="light"
         ref={innerRef}
@@ -276,9 +321,9 @@ function InterviewDemo() {
     <Device innerRef={body}>
       <div className="flex items-center justify-between text-sm">
         <span className="inline-flex items-center gap-2 text-ink"><Waveform bars={5} /> In session</span>
-        <span className="text-xs text-faint">02:14</span>
+        <span className="tnum text-xs text-faint">02:14</span>
       </div>
-      <p className="mt-4 font-serif text-base leading-relaxed text-ink">Tell me about a tradeoff you made in your last project.</p>
+      <p className="mt-4 font-serif text-lg leading-relaxed text-ink">Tell me about a tradeoff you made in your last project.</p>
       <div className="mt-6 grid place-items-center">
         <div className="relative grid h-20 w-20 place-items-center">
           {listening && (
@@ -329,7 +374,7 @@ function ScoringDemo() {
           <div key={k}>
             <div className="flex justify-between text-sm">
               <span className="text-muted">{k}</span>
-              <span className="font-serif font-semibold text-ink">{stage > i ? v : 0}</span>
+              <span className="tnum font-serif font-normal text-ink">{stage > i ? v : 0}</span>
             </div>
             <div className="mt-1.5 h-2 rounded-full bg-line">
               <div className="h-full rounded-full bg-gradient-to-r from-accent to-accent-bright transition-all duration-700 ease-out" style={{ width: stage > i ? `${v}%` : "0%" }} />
@@ -338,7 +383,7 @@ function ScoringDemo() {
         ))}
       </div>
       <div className={`mt-5 flex items-center justify-between rounded-lg bg-accent-soft px-4 py-3 transition-opacity duration-500 ${stage >= 4 ? "opacity-100" : "opacity-0"}`}>
-        <span className="font-serif font-semibold text-ink">Overall 76</span>
+        <span className="font-serif text-lg font-normal text-ink">Overall 76</span>
         <span className="text-sm font-semibold text-accent">Qualified</span>
       </div>
     </Device>
@@ -395,13 +440,113 @@ function DashboardDemo() {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={`https://i.pravatar.cc/64?img=${av}`} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
             <span className="flex-1 text-sm text-ink">{name}</span>
-            <span className="font-serif text-sm font-semibold text-ink">{score}</span>
+            <span className="tnum font-serif text-base font-normal text-ink">{score}</span>
             <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${tag === "Qualified" ? "bg-accent/15 text-accent" : "bg-pend/15 text-pend"}`}>{tag}</span>
           </div>
         ))}
       </div>
       {!reduce && <Cursor cx={cx} cy={cy} />}
     </Device>
+  );
+}
+
+/* ---------------- hero scene: a candidate interviewing with Probe ---------------- */
+
+function InterviewScene() {
+  const reduce = useReducedMotion();
+  const miniBars = [0.45, 0.8, 0.55, 1, 0.5, 0.78, 0.42];
+  return (
+    <div className="relative w-full overflow-hidden rounded-2xl border border-line bg-[var(--readout)] px-5 py-7 sm:px-7">
+      <svg viewBox="0 0 440 300" className="mx-auto w-full max-w-[420px]" role="img" aria-label="A candidate taking a voice interview with Probe on a laptop">
+        {/* soft ground */}
+        <ellipse cx="220" cy="268" rx="150" ry="13" fill="var(--accent)" opacity="0.08" />
+
+        {/* desk */}
+        <rect x="66" y="222" width="308" height="18" rx="7" fill="var(--surface)" stroke="var(--line)" />
+        <rect x="66" y="222" width="308" height="7" rx="3.5" fill="var(--line-strong)" opacity="0.35" />
+
+        {/* person — gentle breathing bob */}
+        <motion.g
+          animate={reduce ? {} : { y: [0, -3, 0] }}
+          transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+        >
+          {/* chair back */}
+          <rect x="70" y="138" width="24" height="96" rx="11" fill="var(--line-strong)" opacity="0.5" />
+          {/* torso */}
+          <path d="M98 234 q0 -66 42 -66 q42 0 42 66 Z" fill="var(--accent)" />
+          {/* neck */}
+          <rect x="128" y="150" width="22" height="22" rx="7" fill="var(--ink)" opacity="0.92" />
+          {/* head */}
+          <circle cx="139" cy="134" r="25" fill="var(--ink)" />
+          {/* arm resting toward the desk */}
+          <path d="M174 198 q28 4 44 26" stroke="var(--accent)" strokeWidth="13" strokeLinecap="round" fill="none" />
+        </motion.g>
+
+        {/* speaking arcs — the candidate's voice toward the laptop */}
+        {!reduce && [12, 21, 30].map((R, i) => (
+          <motion.path
+            key={R}
+            d={`M168 ${134 - R} A ${R} ${R} 0 0 1 168 ${134 + R}`}
+            fill="none" stroke="var(--accent)" strokeWidth="2.4" strokeLinecap="round"
+            animate={{ opacity: [0.08, 0.75, 0.08] }}
+            transition={{ duration: 1.9, repeat: Infinity, delay: i * 0.3, ease: "easeInOut" }}
+          />
+        ))}
+
+        {/* laptop */}
+        <g>
+          <path d="M248 236 l96 0 l20 -14 l-136 0 Z" fill="var(--line-strong)" />
+          <path d="M228 222 l136 0 l-20 14 l-96 0 Z" fill="var(--surface)" stroke="var(--line)" />
+          {/* screen */}
+          <rect x="260" y="138" width="104" height="80" rx="8" fill="var(--ink)" />
+          <rect x="266" y="144" width="92" height="68" rx="5" fill="var(--card)" />
+          {/* on-screen: listening dot + label */}
+          <motion.circle cx="278" cy="158" r="3.4" fill="var(--accent)"
+            animate={reduce ? {} : { opacity: [1, 0.3, 1] }}
+            transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }} />
+          <rect x="287" y="155.5" width="30" height="5" rx="2.5" fill="var(--line-strong)" />
+          {/* on-screen mini waveform */}
+          {miniBars.map((h, i) => (
+            <motion.rect
+              key={i}
+              x={276 + i * 10} width="4" rx="2" fill="var(--accent)"
+              y={196 - h * 26} height={h * 26}
+              style={{ transformOrigin: `${278 + i * 10}px 196px` }}
+              animate={reduce ? {} : { scaleY: [0.4, 1, 0.5] }}
+              transition={{ duration: 1.2 + i * 0.1, repeat: Infinity, ease: "easeInOut", delay: i * 0.08 }}
+            />
+          ))}
+        </g>
+      </svg>
+      <p className="mt-1 text-center text-sm text-muted">A candidate interviewing with Probe, live.</p>
+    </div>
+  );
+}
+
+/* Loads /public/hero-lottie.json and plays it. Falls back gracefully if missing. */
+function HeroLottie() {
+  const [data, setData] = useState(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let on = true;
+    fetch("/hero-lottie.json")
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d) => on && setData(d))
+      .catch(() => on && setFailed(true));
+    return () => { on = false; };
+  }, []);
+
+  if (failed) {
+    // graceful fallback until the animation file is added
+    return <InterviewScene />;
+  }
+  if (!data) {
+    return <div className="grid aspect-[4/3] w-full place-items-center rounded-2xl bg-[var(--readout)] text-sm text-faint">Loading…</div>;
+  }
+  return (
+    <div className="rounded-2xl bg-[var(--readout)] p-2">
+      <Lottie animationData={data} loop autoplay className="mx-auto w-full max-w-[480px]" />
+    </div>
   );
 }
 
@@ -416,34 +561,12 @@ export default function Home() {
 
   return (
     <main className="relative flex-1 overflow-hidden">
-      {/* drifting background glows */}
-      <div aria-hidden className="glow-layer pointer-events-none absolute inset-0 -z-10">
-        <motion.div
-          className="absolute -top-24 right-[-6rem] h-[34rem] w-[34rem] rounded-full blur-3xl"
-          style={{ background: "radial-gradient(circle, color-mix(in oklab, var(--accent) 30%, transparent), transparent 70%)" }}
-          animate={reduce ? {} : { y: [0, 24, 0], x: [0, -16, 0] }}
-          transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
-        />
-        <motion.div
-          className="absolute top-40 left-[-8rem] h-[30rem] w-[30rem] rounded-full blur-3xl"
-          style={{ background: "radial-gradient(circle, color-mix(in oklab, var(--accent-bright) 28%, transparent), transparent 70%)" }}
-          animate={reduce ? {} : { y: [0, -20, 0], x: [0, 18, 0] }}
-          transition={{ duration: 17, repeat: Infinity, ease: "easeInOut" }}
-        />
-        <motion.div
-          className="absolute bottom-[-6rem] left-1/3 h-[26rem] w-[26rem] rounded-full blur-3xl"
-          style={{ background: "radial-gradient(circle, color-mix(in oklab, var(--pass) 16%, transparent), transparent 70%)" }}
-          animate={reduce ? {} : { y: [0, -16, 0] }}
-          transition={{ duration: 19, repeat: Infinity, ease: "easeInOut" }}
-        />
-      </div>
-
       {/* nav */}
-      <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
+      <header className="mx-auto flex max-w-6xl items-center justify-between px-5 py-6 sm:px-6">
         <Logo />
-        <nav className="flex items-center gap-4 text-sm text-muted sm:gap-5">
-          <a href="#how" className="hidden hover:text-ink sm:inline">How it works</a>
-          <Link href="/hr" className="hidden hover:text-ink sm:inline">For recruiters</Link>
+        <nav className="flex items-center gap-4 text-sm text-muted sm:gap-6">
+          <a href="#how" className="hidden transition hover:text-ink sm:inline">How it works</a>
+          <Link href="/hr" className="hidden transition hover:text-ink sm:inline">For recruiters</Link>
           <ThemeToggle />
           <Link href="/candidate" className="rounded-full bg-accent px-5 py-2.5 font-semibold text-accent-ink shadow-lg shadow-accent/25 transition hover:brightness-110">
             Start
@@ -452,20 +575,15 @@ export default function Home() {
       </header>
 
       {/* hero */}
-      <section className="mx-auto grid max-w-6xl items-center gap-14 px-6 pb-24 pt-10 lg:grid-cols-[1.05fr_0.95fr]">
+      <section className="mx-auto grid max-w-6xl items-center gap-12 px-5 pb-20 pt-8 sm:px-6 lg:grid-cols-[1.02fr_0.98fr] lg:gap-14 lg:pb-28 lg:pt-12">
         <div>
-          <motion.span variants={fadeUp} initial="hidden" animate="show" custom={0}
-            className="glass inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-sm text-muted">
-            <Waveform bars={3} /> Live voice screening
-          </motion.span>
-
-          <motion.h1 variants={fadeUp} initial="hidden" animate="show" custom={0.08}
-            className="mt-6 font-serif text-[clamp(40px,5.4vw,66px)] font-medium leading-[1.05] tracking-tight text-ink">
-            From a CV to a scored shortlist — in one conversation.
+          <motion.h1 variants={fadeUp} initial="hidden" animate="show" custom={0.04}
+            className="font-serif text-[clamp(40px,5.4vw,70px)] font-medium leading-[1.05] tracking-tight text-ink">
+            From a CV to a scored shortlist, in one conversation.
           </motion.h1>
 
           <motion.p variants={fadeUp} initial="hidden" animate="show" custom={0.16}
-            className="mt-6 max-w-[46ch] text-lg text-muted">
+            className="mt-6 max-w-[48ch] text-lg leading-relaxed text-muted">
             Probe interviews each candidate by voice, grounded in their own CV, scores every answer against the role, and hands you a ranked result you can trust.
           </motion.p>
 
@@ -478,82 +596,40 @@ export default function Home() {
               Recruiter console
             </Link>
           </motion.div>
+
+          <motion.div variants={fadeUp} initial="hidden" animate="show" custom={0.32}
+            className="mt-10 flex flex-wrap gap-x-8 gap-y-3 text-sm text-muted">
+            <span className="inline-flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-accent" /> CV-grounded questions</span>
+            <span className="inline-flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-accent" /> Scored in real time</span>
+            <span className="inline-flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-accent" /> Proctored &amp; recorded</span>
+          </motion.div>
         </div>
 
-        {/* the one bold element: a floating glass interview panel */}
+        {/* the one bold element: the live instrument readout */}
         <motion.div
-          initial={{ opacity: 0, y: 34, scale: 0.96 }}
+          initial={{ opacity: 0, y: 34, scale: 0.97 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.9, ease, delay: 0.2 }}
           className="relative"
         >
-          {[
-            { pos: "-top-4 -left-3", s: 14, d: 0 },
-            { pos: "top-10 -right-4", s: 10, d: 0.6 },
-            { pos: "bottom-8 -left-5", s: 12, d: 1.1 },
-            { pos: "-bottom-3 right-12", s: 9, d: 1.6 },
-          ].map((sp, i) => (
-            <motion.svg key={i} className={`absolute ${sp.pos} text-accent-bright`} width={sp.s} height={sp.s} viewBox="0 0 24 24" fill="currentColor"
-              animate={reduce ? {} : { opacity: [0.2, 1, 0.2], scale: [0.8, 1.15, 0.8] }}
-              transition={{ duration: 2.4, repeat: Infinity, delay: sp.d, ease: "easeInOut" }}>
-              <path d="M12 0l2.4 9.6L24 12l-9.6 2.4L12 24l-2.4-9.6L0 12l9.6-2.4z" />
-            </motion.svg>
-          ))}
-
-          <motion.div className="glass rounded-3xl p-6">
-            <div className="flex items-center justify-between">
-              <span className="inline-flex items-center gap-2 text-sm font-medium text-ink">
-                <Waveform bars={5} /> In session
-              </span>
-              <span className="text-xs text-faint">Question 3 of 6</span>
-            </div>
-
-            <p className="mt-5 font-serif text-xl leading-relaxed text-ink">
-              Walk me through how you handled state in your last React project.
-            </p>
-
-            <div className="mt-6 space-y-3.5">
-              {[
-                { k: "Technical", v: 78 },
-                { k: "Depth", v: 72 },
-                { k: "Communication", v: 70 },
-              ].map((row, i) => (
-                <div key={row.k}>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted">{row.k}</span>
-                    <span className="font-serif font-semibold text-ink">{row.v}</span>
-                  </div>
-                  <div className="mt-1.5 h-2 rounded-full bg-line">
-                    <motion.div
-                      className="h-full rounded-full bg-gradient-to-r from-accent to-accent-bright"
-                      initial={{ width: 0 }}
-                      animate={{ width: `${row.v}%` }}
-                      transition={{ duration: 1, ease, delay: 0.5 + i * 0.15 }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-6 flex items-center gap-4 border-t border-line pt-5">
-              <ScoreRing value={75} />
-              <div>
-                <div className="font-serif text-lg font-semibold text-pass">Qualified</div>
-                <div className="text-sm text-muted">Meets the bar for this role.</div>
-              </div>
-            </div>
-          </motion.div>
+          <div className="rounded-3xl border border-line-strong bg-card p-5 shadow-xl shadow-[rgba(26,54,120,0.12)] sm:p-6">
+            <HeroLottie />
+          </div>
         </motion.div>
       </section>
 
       {/* how it works — a playing demo screen per step */}
-      <section id="how" className="mx-auto max-w-6xl px-6 py-20">
-        <h2 className="text-center font-serif text-[clamp(34px,4.6vw,56px)] font-semibold text-ink">How a screening runs</h2>
-        <p className="mx-auto mt-4 max-w-lg text-center text-lg text-muted">Four steps, from résumé to a ranked verdict.</p>
+      <section id="how" className="mx-auto max-w-6xl px-5 py-16 sm:px-6 lg:py-24">
+        <div className="max-w-2xl">
+          <span className="text-sm font-semibold tracking-tight text-accent">How a screening runs</span>
+          <h2 className="mt-3 font-serif text-[clamp(34px,4.6vw,56px)] font-normal leading-tight text-ink">
+            Four steps, from resume to a ranked verdict.
+          </h2>
+        </div>
 
-        <div className="mt-16 space-y-20 lg:space-y-28">
+        <div className="mt-14 space-y-20 lg:mt-20 lg:space-y-28">
           {[
-            { n: 1, t: "Upload a CV", d: "The candidate uploads their résumé and picks the role they are applying for.", Mock: UploadDemo },
+            { n: 1, t: "Upload a CV", d: "The candidate uploads their resume and picks the role they are applying for.", Mock: UploadDemo },
             { n: 2, t: "Voice interview", d: "Probe asks questions drawn from their own CV and listens to spoken answers.", Mock: InterviewDemo },
             { n: 3, t: "Scored as it goes", d: "Every answer is judged on correctness, depth, and clarity — in real time.", Mock: ScoringDemo },
             { n: 4, t: "Ranked result", d: "You get a scored verdict and the full transcript for every candidate.", Mock: DashboardDemo },
@@ -568,9 +644,12 @@ export default function Home() {
                   viewport={{ once: true, margin: "-80px" }}
                   transition={{ duration: 0.6, ease }}
                 >
-                  <span className="text-base font-semibold text-accent">Step {s.n}</span>
-                  <h3 className="mt-2 font-serif text-[clamp(32px,3.2vw,46px)] font-semibold leading-tight text-ink">{s.t}</h3>
-                  <p className="mt-4 max-w-md text-xl text-muted">{s.d}</p>
+                  <div className="flex items-baseline gap-3">
+                    <span className="tnum font-serif text-2xl font-normal text-accent">{String(s.n).padStart(2, "0")}</span>
+                    <span className="h-px flex-1 bg-line-strong" />
+                  </div>
+                  <h3 className="mt-4 font-serif text-[clamp(30px,3.2vw,46px)] font-normal leading-tight text-ink">{s.t}</h3>
+                  <p className="mt-4 max-w-md text-lg leading-relaxed text-muted">{s.d}</p>
                 </motion.div>
                 <motion.div
                   className={flip ? "lg:order-1" : ""}
@@ -588,8 +667,8 @@ export default function Home() {
       </section>
 
       {/* access */}
-      <section className="mx-auto max-w-6xl px-6 pb-24 pt-6">
-        <div className="grid gap-5 md:grid-cols-3">
+      <section className="mx-auto max-w-6xl px-5 pb-24 pt-6 sm:px-6">
+        <div className="grid gap-4 sm:gap-5 md:grid-cols-3">
           {[
             { t: "Candidate", d: "Take your interview.", href: "/candidate", icon: "mic" },
             { t: "Recruiter", d: "Review scored candidates.", href: "/hr", icon: "chart" },
@@ -601,7 +680,7 @@ export default function Home() {
                   <Icon name={d.icon} />
                 </span>
                 <span>
-                  <span className="block font-serif text-lg font-semibold text-ink">{d.t}</span>
+                  <span className="block font-serif text-xl font-normal text-ink">{d.t}</span>
                   <span className="block text-sm text-muted">{d.d}</span>
                 </span>
               </Link>
@@ -610,7 +689,7 @@ export default function Home() {
         </div>
       </section>
 
-      <footer className="mx-auto flex max-w-6xl items-center justify-between px-6 py-8 text-sm text-faint">
+      <footer className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-5 py-8 text-sm text-faint sm:px-6">
         <Logo />
         <span>AI interview screener</span>
       </footer>

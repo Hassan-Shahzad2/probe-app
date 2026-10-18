@@ -1,16 +1,19 @@
-import { Plus_Jakarta_Sans, Newsreader } from "next/font/google";
+import { Playfair_Display, Inter } from "next/font/google";
 import "./globals.css";
+import SiteGuide from "./SiteGuide";
 
-const sans = Plus_Jakarta_Sans({
+// Body + UI: a clean, professional, highly legible sans.
+const sans = Inter({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
+  weight: ["400", "500", "600", "700"],
   variable: "--font-sans-probe",
   display: "swap",
 });
 
-const serif = Newsreader({
+// Headings: a classic, elegant serif — professional, not templated.
+const serif = Playfair_Display({
   subsets: ["latin"],
-  weight: ["400", "500", "600"],
+  weight: ["400", "500", "600", "700"],
   style: ["normal", "italic"],
   variable: "--font-serif-probe",
   display: "swap",
@@ -35,7 +38,10 @@ export default function RootLayout({ children }) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInit }} />
       </head>
-      <body className="min-h-full flex flex-col antialiased">{children}</body>
+      <body className="min-h-full flex flex-col antialiased">
+        {children}
+        <SiteGuide />
+      </body>
     </html>
   );
 }
