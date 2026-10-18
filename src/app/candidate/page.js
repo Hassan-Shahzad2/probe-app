@@ -93,6 +93,8 @@ export default function CandidatePage() {
   const micRef = useRef("idle");
   const [transcript, setTranscript] = useState("");
   const [status, setStatus] = useState("");
+  const voicesRef = useRef([]);
+  const ttsAudioRef = useRef(null);
 
   // timers
   const [answerLeft, setAnswerLeft] = useState(null);
@@ -137,6 +139,14 @@ export default function CandidatePage() {
     })();
   }, []);
 
+  // load the list of TTS voices (populates asynchronously in the browser)
+  useEffect(() => {
+    function load() { try { voicesRef.current = window.speechSynthesis.getVoices() || []; } catch {} }
+    load();
+    try { window.speechSynthesis.onvoiceschanged = load; } catch {}
+    return () => { try { window.speechSynthesis.onvoiceschanged = null; } catch {} };
+  }, []);
+
   // keep the live camera preview wired up across phases
   useEffect(() => {
     if ((phase === "permissions" || phase === "interview") && videoRef.current && camStreamRef.current) {
@@ -148,6 +158,7 @@ export default function CandidatePage() {
   useEffect(() => () => {
     endedRef.current = true; // stop the interview loop if the candidate leaves mid-way
     try { window.speechSynthesis.cancel(); } catch {}
+    stopTts();
     isRecordingRef.current = false;
     try { answerRecRef.current && answerRecRef.current.state !== "inactive" && answerRecRef.current.stop(); } catch {}
     stopSilenceWatch();
@@ -264,18 +275,66 @@ export default function CandidatePage() {
     startInterview();
   }
 
-  function speak(text) {
+  function pickVoice() {
+    const voices = voicesRef.current || [];
+    const prefer = [
+      "Microsoft Aria Online (Natural) - English (United States)",
+      "Microsoft Jenny Online (Natural) - English (United States)",
+      "Google US English",
+      "Google UK English Female",
+      "Samantha",
+    ];
+    for (const name of prefer) { const v = voices.find((x) => x.name === name); if (v) return v; }
+    return voices.find((x) => /en[-_]?US/i.test(x.lang) && /google|natural/i.test(x.name))
+        || voices.find((x) => /en[-_]?(US|GB)/i.test(x.lang))
+        || null;
+  }
+  function browserSpeak(text) {
     return new Promise((resolve) => {
       try {
         window.speechSynthesis.cancel();
         const u = new SpeechSynthesisUtterance(text);
-        u.lang = "en-IN";
+        const v = pickVoice();
+        if (v) { u.voice = v; u.lang = v.lang; } else { u.lang = "en-US"; }
         u.rate = 1;
+        u.pitch = 1;
         u.onend = () => resolve();
         u.onerror = () => resolve();
         window.speechSynthesis.speak(u);
       } catch { resolve(); }
     });
+  }
+  function stopTts() {
+    try { const a = ttsAudioRef.current; if (a) { a.pause(); a.src = ""; } } catch {}
+    ttsAudioRef.current = null;
+  }
+  async function speak(text, onStart) {
+    stopTts();
+    try { window.speechSynthesis.cancel(); } catch {}
+    let started = false;
+    const fireStart = () => { if (!started) { started = true; try { onStart && onStart(); } catch {} } };
+    try {
+      const r = await fetch("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      if (!r.ok) throw new Error("tts");
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      await new Promise((resolve) => {
+        const audio = new Audio(url);
+        ttsAudioRef.current = audio;
+        const done = () => { try { URL.revokeObjectURL(url); } catch {} resolve(); };
+        audio.onended = done;
+        audio.onerror = done;
+        audio.onplaying = fireStart;
+        audio.play().then(fireStart).catch(done);
+      });
+    } catch {
+      fireStart();
+      await browserSpeak(text); // fallback if OpenAI TTS is unavailable
+    }
   }
 
   async function callEngine(answer) {
@@ -440,13 +499,13 @@ export default function CandidatePage() {
     lastQuestionRef.current = text;
     askedRef.current += 1;
     setQNum((n) => n + 1);
-    setQuestion(text);
+    setQuestion(""); // keep it hidden until the voice is ready, so they land together
     setTranscript("");
     clearAnswerWindow();
     setMicState("disabled");
     setSpeaking(true);
-    setStatus("Listen to the question…");
-    await speak(text);
+    setStatus("Preparing the question…");
+    await speak(text, () => { setQuestion(text); setStatus(""); });
     if (endedRef.current) return;
     setSpeaking(false);
     setStatus("Tap the mic and answer. Just stop speaking when you're done.");
