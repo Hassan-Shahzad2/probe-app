@@ -469,10 +469,10 @@ export default function CandidatePage() {
     stopAllTimers();
     finalizeInterview();
     setMicState("disabled");
-    setQuestion(message.q);
-    setStatus("");
+    setQuestion("");                 // hidden until the voice is ready, so text + voice land together
+    setStatus("Preparing…");
     setSpeaking(true);
-    await speak(message.spoken);
+    await speak(message.spoken, () => { setQuestion(message.q); setStatus(""); });
     setSpeaking(false);
     setPhase("done");
     await stopRecordersAndUpload();
