@@ -69,6 +69,9 @@ export default function CandidatePage() {
   const [email, setEmail] = useState("");
   const [jobId, setJobId] = useState("");
   const [fileName, setFileName] = useState("");
+  const [captchaToken, setCaptchaToken] = useState("");
+  const turnstileRef = useRef(null);
+  const widgetIdRef = useRef(null);
   const fileRef = useRef(null);
   const [uploading, setUploading] = useState(false);
   const [formErr, setFormErr] = useState("");
@@ -523,11 +526,59 @@ export default function CandidatePage() {
     }
   }
 
+  // Cloudflare Turnstile: load the script once, render the widget while on the form.
+  useEffect(() => {
+    if (phase !== "form") return;
+    const SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+    if (!SITE_KEY) return;
+
+    function renderWidget() {
+      if (!turnstileRef.current || !window.turnstile) return;
+      if (widgetIdRef.current !== null) return; // already rendered
+      widgetIdRef.current = window.turnstile.render(turnstileRef.current, {
+        sitekey: SITE_KEY,
+        callback: (token) => setCaptchaToken(token),
+        "expired-callback": () => setCaptchaToken(""),
+        "error-callback": () => setCaptchaToken(""),
+      });
+    }
+
+    if (window.turnstile) {
+      renderWidget();
+    } else {
+      const existing = document.getElementById("cf-turnstile-script");
+      if (!existing) {
+        const s = document.createElement("script");
+        s.id = "cf-turnstile-script";
+        s.src = "https://challenges.cloudflare.com/turnstile/v0/api.js";
+        s.async = true;
+        s.defer = true;
+        s.onload = renderWidget;
+        document.head.appendChild(s);
+      } else {
+        existing.addEventListener("load", renderWidget);
+      }
+    }
+
+    return () => {
+      try {
+        if (widgetIdRef.current !== null && window.turnstile) {
+          window.turnstile.remove(widgetIdRef.current);
+        }
+      } catch {}
+      widgetIdRef.current = null;
+    };
+  }, [phase]);
+
   async function submitCV(e) {
     e.preventDefault();
     const file = fileRef.current && fileRef.current.files && fileRef.current.files[0];
     if (!name.trim() || !email.trim() || !file) {
       setFormErr("Please add your name, email, and attach a PDF.");
+      return;
+    }
+    if (process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY && !captchaToken) {
+      setFormErr("Please complete the verification check below the form.");
       return;
     }
     const job = jobs.find((j) => j.id === jobId);
@@ -547,6 +598,7 @@ export default function CandidatePage() {
     fd.append("num_questions", numQ);
     fd.append("job_title", job ? job.title : "");
     fd.append("job_description", job ? job.description : "");
+    fd.append("captcha_token", captchaToken);
 
     try {
       const r = await fetch("/api/upload-cv", { method: "POST", body: fd });
@@ -559,6 +611,8 @@ export default function CandidatePage() {
     } catch {
       setFormErr("Something went wrong uploading your CV. Please try again.");
       setUploading(false);
+      try { if (widgetIdRef.current !== null && window.turnstile) window.turnstile.reset(widgetIdRef.current); } catch {}
+      setCaptchaToken("");
     }
   }
 
@@ -698,6 +752,9 @@ export default function CandidatePage() {
                 </label>
               </div>
               {formErr && <p className="text-sm text-fail">{formErr}</p>}
+              {process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY && (
+                <div ref={turnstileRef} className="flex justify-center"></div>
+              )}
               <button type="submit" disabled={uploading} className="w-full rounded-xl bg-accent py-3 font-semibold text-accent-ink transition hover:brightness-110 disabled:opacity-60">
                 {uploading ? "Uploading and processing…" : "Continue"}
               </button>
