@@ -4,8 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { motion } from "motion/react";
 
-const ANSWER_WINDOW = 7;   // seconds to BEGIN answering before the question repeats
-const SILENCE_MS = 4000;   // auto-finish an answer after this much silence
+const ANSWER_WINDOW = 7;      // seconds to BEGIN answering before the question repeats
+const SILENCE_MS = 2500;      // stop the answer after this much silence once they've spoken
+const VOICE_THRESHOLD = 0.02; // mic loudness (0..1) above which counts as speaking
+const MAX_ANSWER_MS = 90000;  // hard cap on a single answer
 
 /* ---------- small pieces ---------- */
 function Bars({ n = 5 }) {
@@ -97,17 +99,21 @@ export default function CandidatePage() {
   const [overallLeft, setOverallLeft] = useState(null);
   const answerTickRef = useRef(null);
   const overallTickRef = useRef(null);
-  const silenceRef = useRef(null);
   const repeatedRef = useRef(false);
   const endedRef = useRef(false);
 
   const lastQuestionRef = useRef("");
-  const recRef = useRef(null);
   const isRecordingRef = useRef(false);
-  const finalRef = useRef("");
   const submittingRef = useRef(false);
 
-  // proctoring recorders (video only — the mic is owned by SpeechRecognition)
+  // Whisper answer capture
+  const answerRecRef = useRef(null);
+  const answerChunksRef = useRef([]);
+  const vadCtxRef = useRef(null);
+  const vadIntervalRef = useRef(null);
+  const lastLoudRef = useRef(0);
+
+  // proctoring recorders (camera records video+audio; screen records video + mixed audio)
   const camRecRef = useRef(null);
   const screenRecRef = useRef(null);
   const camChunksRef = useRef([]);
@@ -143,13 +149,13 @@ export default function CandidatePage() {
     endedRef.current = true; // stop the interview loop if the candidate leaves mid-way
     try { window.speechSynthesis.cancel(); } catch {}
     isRecordingRef.current = false;
-    try { recRef.current && recRef.current.stop(); } catch {}
+    try { answerRecRef.current && answerRecRef.current.state !== "inactive" && answerRecRef.current.stop(); } catch {}
+    stopSilenceWatch();
     if (answerTickRef.current) clearInterval(answerTickRef.current);
     if (overallTickRef.current) clearInterval(overallTickRef.current);
-    if (silenceRef.current) clearTimeout(silenceRef.current);
     try { camStreamRef.current && camStreamRef.current.getTracks().forEach((t) => t.stop()); } catch {}
     try { screenStreamRef.current && screenStreamRef.current.getTracks().forEach((t) => t.stop()); } catch {}
-    try { screenAudioCtxRef.current && screenAudioCtxRef.current.close(); } catch {}
+    try { const a = screenAudioCtxRef.current; screenAudioCtxRef.current = null; if (a && a.state !== "closed") a.close().catch(() => {}); } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -157,8 +163,8 @@ export default function CandidatePage() {
   async function requestCam() {
     try {
       const s = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      // keep BOTH video and audio: the audio is recorded for proctoring (to verify
-      // no outside / AI help). SpeechRecognition uses its own mic access independently.
+      // keep BOTH video and audio: the mic audio is used for proctoring AND for the
+      // per-answer recording that gets transcribed by Whisper.
       camStreamRef.current = s;
       setCamOk(true);
       setPermErr("");
@@ -294,11 +300,41 @@ export default function CandidatePage() {
     }).catch(() => {});
   }
 
-  /* ----- silence auto-finish ----- */
-  function clearSilence() { if (silenceRef.current) { clearTimeout(silenceRef.current); silenceRef.current = null; } }
-  function armSilence() {
-    clearSilence();
-    silenceRef.current = setTimeout(() => { if (isRecordingRef.current) stopRecording(); }, SILENCE_MS);
+  /* ----- silence detection (Web Audio VAD) ----- */
+  function stopSilenceWatch() {
+    if (vadIntervalRef.current) { clearInterval(vadIntervalRef.current); vadIntervalRef.current = null; }
+    const ac = vadCtxRef.current;
+    vadCtxRef.current = null;
+    if (ac && ac.state !== "closed") { try { ac.close().catch(() => {}); } catch {} }
+  }
+  function startSilenceWatch(stream) {
+    stopSilenceWatch();
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      const ac = new AC();
+      vadCtxRef.current = ac;
+      try { ac.resume(); } catch {}
+      const src = ac.createMediaStreamSource(stream);
+      const analyser = ac.createAnalyser();
+      analyser.fftSize = 2048;
+      src.connect(analyser);
+      const data = new Uint8Array(analyser.fftSize);
+      let spoke = false;
+      const startT = Date.now();
+      lastLoudRef.current = startT;
+      vadIntervalRef.current = setInterval(() => {
+        if (!isRecordingRef.current) return;
+        analyser.getByteTimeDomainData(data);
+        let sum = 0;
+        for (let i = 0; i < data.length; i++) { const x = (data[i] - 128) / 128; sum += x * x; }
+        const rms = Math.sqrt(sum / data.length);
+        const now = Date.now();
+        if (rms > VOICE_THRESHOLD) { spoke = true; lastLoudRef.current = now; }
+        if (now - startT > MAX_ANSWER_MS) { stopRecording(); return; }
+        if (spoke && now - lastLoudRef.current > SILENCE_MS) { stopRecording(); }
+      }, 150);
+    } catch {}
   }
 
   /* ----- begin window ----- */
@@ -360,14 +396,14 @@ export default function CandidatePage() {
   }
   function stopAllTimers() {
     clearAnswerWindow();
-    clearSilence();
+    stopSilenceWatch();
     if (overallTickRef.current) { clearInterval(overallTickRef.current); overallTickRef.current = null; }
   }
 
   async function endInterview(message) {
     endedRef.current = true;
     isRecordingRef.current = false;
-    try { recRef.current && recRef.current.stop(); } catch {}
+    try { answerRecRef.current && answerRecRef.current.state !== "inactive" && answerRecRef.current.stop(); } catch {}
     stopAllTimers();
     finalizeInterview();
     setMicState("disabled");
@@ -380,7 +416,7 @@ export default function CandidatePage() {
     await stopRecordersAndUpload();
     try { camStreamRef.current && camStreamRef.current.getTracks().forEach((t) => t.stop()); } catch {}
     try { screenStreamRef.current && screenStreamRef.current.getTracks().forEach((t) => t.stop()); } catch {}
-    try { screenAudioCtxRef.current && screenAudioCtxRef.current.close(); } catch {}
+    try { const a = screenAudioCtxRef.current; screenAudioCtxRef.current = null; if (a && a.state !== "closed") a.close().catch(() => {}); } catch {}
   }
   async function timeUp() {
     if (endedRef.current) return;
@@ -467,56 +503,48 @@ export default function CandidatePage() {
     }
   }
 
-  /* ----- voice ----- */
+  /* ----- voice (record -> Whisper) ----- */
+  function answerMime() {
+    const types = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"];
+    for (const t of types) { try { if (window.MediaRecorder && MediaRecorder.isTypeSupported(t)) return t; } catch {} }
+    return "";
+  }
   function startRecording() {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { setStatus("Voice input needs Chrome. Please open this in Chrome."); return; }
+    const cam = camStreamRef.current;
+    const audioTracks = cam ? cam.getAudioTracks() : [];
+    if (!window.MediaRecorder || !audioTracks.length) { setStatus("Microphone isn't available. Please refresh and allow the mic."); return; }
     clearAnswerWindow();
-    const rec = new SR();
-    rec.lang = "en-IN";
-    rec.continuous = true;
-    rec.interimResults = true;
-    finalRef.current = "";
+    const audioStream = new MediaStream(audioTracks);
+    answerChunksRef.current = [];
+    let rec;
+    const mime = answerMime();
+    try { rec = mime ? new MediaRecorder(audioStream, { mimeType: mime }) : new MediaRecorder(audioStream); }
+    catch { try { rec = new MediaRecorder(audioStream); } catch { setStatus("Couldn't start the mic. Tap to try again."); return; } }
+    answerRecRef.current = rec;
     isRecordingRef.current = true;
-    recRef.current = rec;
     setMicState("listening");
     setTranscript("");
     setStatus("Listening… just stop speaking when you're done.");
-
-    rec.onresult = (event) => {
-      let interim = "";
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const t = event.results[i][0].transcript;
-        if (event.results[i].isFinal) finalRef.current += t + " ";
-        else interim += t;
-      }
-      setTranscript((finalRef.current + interim).trim() || "…");
-      if (isRecordingRef.current) armSilence();
-    };
-    rec.onerror = (event) => {
-      if (event.error === "no-speech" || event.error === "aborted") return;
-      isRecordingRef.current = false;
-      clearSilence();
-      setStatus("Mic error (" + event.error + "). Tap the mic to try again.");
-      setMicState("ready");
-    };
-    rec.onend = () => {
-      if (isRecordingRef.current) { try { rec.start(); } catch {} }
-      else finishAnswer();
-    };
-
-    try { rec.start(); armSilence(); }
+    rec.ondataavailable = (e) => { if (e.data && e.data.size > 0) answerChunksRef.current.push(e.data); };
+    rec.onstop = () => { transcribeAndFinish(); };
+    try { rec.start(); }
     catch {
       isRecordingRef.current = false;
       setStatus("Couldn't start the mic. Tap to try again.");
       setMicState("ready");
+      return;
     }
+    startSilenceWatch(audioStream);
   }
 
   function stopRecording() {
+    if (!isRecordingRef.current) return;
     isRecordingRef.current = false;
-    clearSilence();
-    try { recRef.current && recRef.current.stop(); } catch {}
+    stopSilenceWatch();
+    try {
+      if (answerRecRef.current && answerRecRef.current.state !== "inactive") answerRecRef.current.stop();
+      else transcribeAndFinish();
+    } catch { transcribeAndFinish(); }
   }
 
   function tapMic() {
@@ -524,23 +552,41 @@ export default function CandidatePage() {
     if (micRef.current === "ready") startRecording();
   }
 
-  async function finishAnswer() {
+  async function transcribeAndFinish() {
     if (submittingRef.current || endedRef.current) return;
     submittingRef.current = true;
-    clearSilence();
-    const spoken = (finalRef.current || "").trim();
-    if (!spoken) {
+    stopSilenceWatch();
+    const chunks = answerChunksRef.current || [];
+    if (!chunks.length) {
       setStatus("I didn't catch that — tap the mic and try again.");
       setMicState("ready");
       submittingRef.current = false;
       startAnswerWindow();
       return;
     }
-    setTranscript(spoken);
-    setStatus("Evaluating your answer…");
     setMicState("processing");
+    setStatus("Transcribing your answer…");
+    const blob = new Blob(chunks, { type: "audio/webm" });
+    const fd = new FormData();
+    fd.append("file", blob, "answer.webm");
+    let text = "";
     try {
-      const result = await callEngine(spoken);
+      const r = await fetch("/api/transcribe", { method: "POST", body: fd });
+      const data = await r.json();
+      text = (data && data.text ? data.text : "").trim();
+    } catch {}
+    if (endedRef.current) { submittingRef.current = false; return; }
+    if (!text) {
+      setStatus("I didn't catch that — tap the mic and try again.");
+      setMicState("ready");
+      submittingRef.current = false;
+      startAnswerWindow();
+      return;
+    }
+    setTranscript(text);
+    setStatus("Evaluating your answer…");
+    try {
+      const result = await callEngine(text);
       await afterTurn(result);
     } catch {
       setStatus("Something went wrong. Tap the mic to retry.");
