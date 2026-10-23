@@ -537,6 +537,8 @@ export default function CandidatePage() {
       if (widgetIdRef.current !== null) return; // already rendered
       widgetIdRef.current = window.turnstile.render(turnstileRef.current, {
         sitekey: SITE_KEY,
+        theme: document.documentElement.dataset.theme === "dark" ? "dark" : "light",
+        size: "flexible", // stretch to the form width so it sits in-line, not a floating box
         callback: (token) => setCaptchaToken(token),
         "expired-callback": () => setCaptchaToken(""),
         "error-callback": () => setCaptchaToken(""),
@@ -711,11 +713,55 @@ export default function CandidatePage() {
 
   const pct = totalQ ? Math.min(100, Math.round((qNum / totalQ) * 100)) : 0;
 
+  // Interview is laptop/desktop only — it records the screen, which phones/tablets don't support.
+  const [envChecked, setEnvChecked] = useState(false);
+  const [laptopOnly, setLaptopOnly] = useState(false);
+  useEffect(() => {
+    try {
+      const mobileUA = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
+      const noShare = !(navigator.mediaDevices && typeof navigator.mediaDevices.getDisplayMedia === "function");
+      setLaptopOnly(mobileUA || noShare);
+    } catch {}
+    setEnvChecked(true);
+  }, []);
+
+  if (envChecked && laptopOnly) {
+    return (
+      <main className="relative flex min-h-screen flex-col">
+        <header className="mx-auto flex w-full max-w-4xl items-center justify-between px-5 py-6 sm:px-6">
+          <Link href="/" className="inline-flex items-center gap-2.5">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden className="text-accent">
+              <rect x="9" y="2.5" width="6" height="11" rx="3" fill="currentColor" />
+              <path d="M6.5 11a5.5 5.5 0 0 0 11 0" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" fill="none" />
+              <path d="M12 16.5V21M8.5 21h7" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+            </svg>
+            <b className="font-serif text-[22px] font-semibold tracking-tight text-ink">Probe</b>
+          </Link>
+          <Link href="/" className="text-sm text-muted transition hover:text-ink">Exit</Link>
+        </header>
+        <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-5 pb-16 text-center sm:px-6">
+          <div className="glass rounded-3xl p-8">
+            <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-accent-soft text-accent">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="12" rx="2" /><path d="M2 20h20" /></svg>
+            </span>
+            <h1 className="mt-5 font-serif text-2xl font-semibold text-ink">Please use a laptop or desktop</h1>
+            <p className="mt-3 leading-relaxed text-muted">The Probe interview records your camera, microphone and screen, which phones and tablets don't support. Open this page on a laptop or desktop computer to take your interview.</p>
+            <Link href="/" className="mt-6 inline-block rounded-xl bg-accent px-6 py-3 font-semibold text-accent-ink transition hover:brightness-110">Back to home</Link>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="relative flex min-h-screen flex-col">
-      <header className="mx-auto flex w-full max-w-4xl items-center justify-between px-6 py-6">
+      <header className="mx-auto flex w-full max-w-4xl items-center justify-between px-5 py-6 sm:px-6">
         <Link href="/" className="inline-flex items-center gap-2.5">
-          <Bars n={4} />
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden className="text-accent">
+            <rect x="9" y="2.5" width="6" height="11" rx="3" fill="currentColor" />
+            <path d="M6.5 11a5.5 5.5 0 0 0 11 0" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" fill="none" />
+            <path d="M12 16.5V21M8.5 21h7" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+          </svg>
           <b className="font-serif text-[22px] font-semibold tracking-tight text-ink">Probe</b>
         </Link>
         <Link href="/" className="text-sm text-muted transition hover:text-ink">Exit</Link>
@@ -753,7 +799,7 @@ export default function CandidatePage() {
               </div>
               {formErr && <p className="text-sm text-fail">{formErr}</p>}
               {process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY && (
-                <div ref={turnstileRef} className="flex justify-center"></div>
+                <div ref={turnstileRef} className="min-h-[65px] w-full"></div>
               )}
               <button type="submit" disabled={uploading} className="w-full rounded-xl bg-accent py-3 font-semibold text-accent-ink transition hover:brightness-110 disabled:opacity-60">
                 {uploading ? "Uploading and processing…" : "Continue"}

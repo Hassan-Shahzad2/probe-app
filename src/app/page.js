@@ -622,7 +622,7 @@ export default function Home() {
       <section id="how" className="mx-auto max-w-6xl px-5 py-16 sm:px-6 lg:py-24">
         <div className="max-w-2xl">
           <span className="text-sm font-semibold tracking-tight text-accent">How a screening runs</span>
-          <h2 className="mt-3 font-serif text-[clamp(34px,4.6vw,56px)] font-normal leading-tight text-ink">
+          <h2 className="mt-3 font-serif text-[clamp(34px,4.6vw,56px)] font-medium leading-tight text-ink">
             Four steps, from resume to a ranked verdict.
           </h2>
         </div>
@@ -645,10 +645,10 @@ export default function Home() {
                   transition={{ duration: 0.6, ease }}
                 >
                   <div className="flex items-baseline gap-3">
-                    <span className="tnum font-serif text-2xl font-normal text-accent">{String(s.n).padStart(2, "0")}</span>
+                    <span className="tnum font-serif text-2xl font-medium text-accent">{String(s.n).padStart(2, "0")}</span>
                     <span className="h-px flex-1 bg-line-strong" />
                   </div>
-                  <h3 className="mt-4 font-serif text-[clamp(30px,3.2vw,46px)] font-normal leading-tight text-ink">{s.t}</h3>
+                  <h3 className="mt-4 font-serif text-[clamp(30px,3.2vw,46px)] font-medium leading-tight text-ink">{s.t}</h3>
                   <p className="mt-4 max-w-md text-lg leading-relaxed text-muted">{s.d}</p>
                 </motion.div>
                 <motion.div
@@ -680,7 +680,7 @@ export default function Home() {
                   <Icon name={d.icon} />
                 </span>
                 <span>
-                  <span className="block font-serif text-xl font-normal text-ink">{d.t}</span>
+                  <span className="block font-serif text-xl font-medium text-ink">{d.t}</span>
                   <span className="block text-sm text-muted">{d.d}</span>
                 </span>
               </Link>

@@ -15,10 +15,11 @@ export function useRequireRole(requiredRole) {
     (async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!active) return;
-      if (!session) { router.replace("/login"); return; }
+      if (!session) { router.replace("/login" + (requiredRole ? "?role=" + requiredRole : "")); return; }
       const role = session.user?.app_metadata?.role || null;
       if (requiredRole && role !== requiredRole) {
-        router.replace(role === "admin" ? "/admin" : role === "hr" ? "/hr" : "/login");
+        // logged in but wrong area → show an access-denied screen (no silent redirect)
+        setState({ status: "denied", user: session.user, role });
         return;
       }
       setState({ status: "ready", user: session.user, role });

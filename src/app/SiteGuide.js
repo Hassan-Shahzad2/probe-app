@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 
 // Change this to whatever contact address you want shown for off-topic questions.
@@ -99,6 +100,7 @@ function Typing() {
 }
 
 export default function SiteGuide() {
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [typing, setTyping] = useState(false);
   const [messages, setMessages] = useState([{ role: "bot", text: GREETING }]);
@@ -124,6 +126,9 @@ export default function SiteGuide() {
       setMessages((m) => [...m, { role: "bot", ...reply }]);
     }, 650);
   }
+
+  // Only show the guide on the main (landing) page.
+  if (pathname !== "/") return null;
 
   return (
     <>

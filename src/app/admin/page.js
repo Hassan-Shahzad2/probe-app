@@ -106,6 +106,21 @@ export default function AdminPage() {
     setTimeout(() => setOkMsg(""), 3000);
   }
 
+  if (auth.status === "denied") {
+    return (
+      <main className="grid min-h-screen place-items-center px-6">
+        <div className="glass max-w-md rounded-3xl p-8 text-center">
+          <h1 className="font-serif text-2xl font-semibold text-ink">Access denied</h1>
+          <p className="mt-2 text-muted">This is the admin area. Your account doesn't have admin access.</p>
+          <div className="mt-6 flex justify-center gap-3">
+            <button onClick={() => router.replace(auth.role === "hr" ? "/hr" : "/login")} className="rounded-xl bg-accent px-5 py-2.5 font-semibold text-accent-ink transition hover:brightness-110">Go to your area</button>
+            <button onClick={logout} className="rounded-xl border border-line px-5 py-2.5 font-medium text-ink transition hover:border-accent">Log out</button>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   if (auth.status !== "ready") {
     return (
       <main className="grid min-h-screen place-items-center">
@@ -118,9 +133,11 @@ export default function AdminPage() {
     <main className="relative flex min-h-screen flex-col">
       <header className="mx-auto flex w-full max-w-4xl items-center justify-between px-6 py-6">
         <Link href="/" className="inline-flex items-center gap-2.5">
-          <span className="inline-flex items-end gap-[3px]" aria-hidden>
-            {[8, 14, 20, 12].map((h, i) => (<span key={i} style={{ height: h }} className="w-[3px] rounded-full bg-accent" />))}
-          </span>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden className="text-accent">
+            <rect x="9" y="2.5" width="6" height="11" rx="3" fill="currentColor" />
+            <path d="M6.5 11a5.5 5.5 0 0 0 11 0" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" fill="none" />
+            <path d="M12 16.5V21M8.5 21h7" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+          </svg>
           <b className="font-serif text-[22px] font-semibold tracking-tight text-ink">Probe</b>
           <span className="ml-1 rounded-md bg-accent-soft px-2 py-0.5 text-xs font-medium text-accent">Admin</span>
         </Link>

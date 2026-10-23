@@ -19,6 +19,7 @@ export default function ForgotPasswordPage() {
       redirectTo: window.location.origin + "/reset-password",
     });
     setBusy(false);
+    // Always show success (don't reveal whether an email exists).
     if (error && error.message && /rate/i.test(error.message)) {
       setErr("Too many attempts — please wait a minute and try again.");
       return;
@@ -30,9 +31,11 @@ export default function ForgotPasswordPage() {
     <main className="relative flex min-h-screen flex-col">
       <header className="mx-auto flex w-full max-w-4xl items-center justify-between px-6 py-6">
         <Link href="/" className="inline-flex items-center gap-2.5">
-          <span className="inline-flex items-end gap-[3px]" aria-hidden>
-            {[10, 16, 22, 14].map((h, i) => (<span key={i} style={{ height: h }} className="w-[3px] rounded-full bg-accent" />))}
-          </span>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden className="text-accent">
+            <rect x="9" y="2.5" width="6" height="11" rx="3" fill="currentColor" />
+            <path d="M6.5 11a5.5 5.5 0 0 0 11 0" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" fill="none" />
+            <path d="M12 16.5V21M8.5 21h7" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+          </svg>
           <b className="font-serif text-[22px] font-semibold tracking-tight text-ink">Probe</b>
         </Link>
         <Link href="/login" className="text-sm text-muted transition hover:text-ink">Back to sign in</Link>
