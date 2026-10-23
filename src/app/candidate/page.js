@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { motion } from "motion/react";
+import { supabase } from "@/lib/supabaseClient";
 
 const ANSWER_WINDOW = 7;      // seconds to BEGIN answering before the question repeats
 const SILENCE_MS = 2500;      // stop the answer after this much silence once they've spoken
@@ -259,11 +260,21 @@ export default function CandidatePage() {
     const chunks = chunksRef.current || [];
     if (!chunks.length || !interviewIdRef.current) return;
     const blob = new Blob(chunks, { type: "video/webm" });
-    const fd = new FormData();
-    fd.append("file", blob, kind + ".webm");
-    fd.append("interview_id", interviewIdRef.current);
-    fd.append("kind", kind);
-    try { await fetch("/api/upload-recording", { method: "POST", body: fd }); } catch {}
+    try {
+      // Ask the server for a one-time signed upload URL, then send the file
+      // straight to Supabase Storage. This bypasses Vercel's ~4.5 MB request-body
+      // limit, which silently blocked recordings when they posted through the API route.
+      const res = await fetch("/api/sign-recording", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ interview_id: interviewIdRef.current, kind }),
+      });
+      if (!res.ok) return;
+      const { path, token } = await res.json();
+      await supabase.storage
+        .from("recordings")
+        .uploadToSignedUrl(path, token, blob, { contentType: "video/webm" });
+    } catch {}
   }
   async function stopRecordersAndUpload() {
     try { await Promise.all([stopOneRecorder(camRecRef.current), stopOneRecorder(screenRecRef.current)]); } catch {}
