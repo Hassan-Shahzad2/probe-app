@@ -36,7 +36,7 @@ function StatTile({ label, value, foot, tone }) {
   return (
     <div className="glass rounded-2xl p-5">
       <div className="text-sm text-muted">{label}</div>
-      <div className={`mt-1 font-serif text-3xl font-semibold ${tones[tone] || "text-ink"}`}>{value}</div>
+      <div className={`mt-1 text-3xl font-semibold tnum ${tones[tone] || "text-ink"}`}>{value}</div>
       <div className="mt-1 text-xs text-faint">{foot}</div>
     </div>
   );
@@ -52,7 +52,7 @@ function Donut({ pass, fail, pend }) {
       <div className="h-full w-full rounded-full" style={{ background: bg }} />
       <div className="absolute inset-[18%] grid place-items-center rounded-full bg-card">
         <div className="text-center">
-          <div className="font-serif text-2xl font-semibold text-ink">{pass + fail + pend}</div>
+          <div className="text-2xl font-semibold tnum text-ink">{pass + fail + pend}</div>
           <div className="text-[10px] text-faint">candidates</div>
         </div>
       </div>
@@ -72,7 +72,7 @@ function Bars({ avg }) {
         <div key={k}>
           <div className="flex justify-between text-sm">
             <span className="text-muted">{k}</span>
-            <span className="font-serif font-semibold text-ink">{Math.round(v)}</span>
+            <span className="font-semibold tnum text-ink">{Math.round(v)}</span>
           </div>
           <div className="mt-1 h-2 rounded-full bg-line">
             <motion.div className="h-full rounded-full bg-gradient-to-r from-accent to-accent-bright"
@@ -133,7 +133,7 @@ function CandidateCard({ iv }) {
         </div>
         <div className="text-right">
           {overall != null ? (
-            <div className="font-serif text-xl font-semibold text-ink">{Math.round(overall)}<span className="text-sm text-faint">/100</span></div>
+            <div className="text-xl font-semibold tnum text-ink">{Math.round(overall)}<span className="text-sm text-faint">/100</span></div>
           ) : (
             <div className="text-sm text-pend">In progress</div>
           )}
@@ -156,7 +156,7 @@ function CandidateCard({ iv }) {
               <div className="mt-4 grid grid-cols-3 gap-3">
                 {[["Technical", report.technical_score], ["Communication", report.communication_score], ["Problem solving", report.problem_solving_score]].map(([k, v]) => (
                   <div key={k} className="rounded-lg bg-card p-3 text-center">
-                    <div className="font-serif text-lg font-semibold text-ink">{v ?? "—"}<span className="text-xs text-faint">/100</span></div>
+                    <div className="text-lg font-semibold tnum text-ink">{v ?? "—"}<span className="text-xs text-faint">/100</span></div>
                     <div className="text-xs text-muted">{k}</div>
                   </div>
                 ))}
