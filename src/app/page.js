@@ -691,7 +691,7 @@ export default function Home() {
 
       <footer className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-5 py-8 text-sm text-faint sm:px-6">
         <Logo />
-        <span>AI interview screener</span>
+        <span>AI interview screener · Built by Muhammad Hassan Shahzad</span>
       </footer>
     </main>
   );
