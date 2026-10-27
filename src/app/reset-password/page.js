@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "motion/react";
 import { supabase } from "@/lib/supabaseClient";
+import PasswordInput from "@/components/PasswordInput";
 
 export default function ResetPasswordPage() {
   const router = useRouter();
@@ -76,13 +77,11 @@ export default function ResetPasswordPage() {
               <form onSubmit={onSubmit} className="mt-7 space-y-4">
                 <div>
                   <label className="mb-1 block text-sm font-medium text-ink">New password</label>
-                  <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password"
-                    className="w-full rounded-lg border border-line bg-card2 px-3 py-2.5 text-ink outline-none transition focus:border-accent" placeholder="••••••••" />
+                  <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" placeholder="••••••••" />
                 </div>
                 <div>
                   <label className="mb-1 block text-sm font-medium text-ink">Confirm password</label>
-                  <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password"
-                    className="w-full rounded-lg border border-line bg-card2 px-3 py-2.5 text-ink outline-none transition focus:border-accent" placeholder="••••••••" />
+                  <PasswordInput value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" placeholder="••••••••" />
                 </div>
                 {err && <p className="text-sm text-fail">{err}</p>}
                 <button type="submit" disabled={busy} className="w-full rounded-xl bg-accent py-3 font-semibold text-accent-ink transition hover:brightness-110 disabled:opacity-60">
