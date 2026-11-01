@@ -7,15 +7,11 @@ import { motion } from "motion/react";
 import { supabase } from "@/lib/supabaseClient";
 import PasswordInput from "@/components/PasswordInput";
 
-function Bars({ n = 4 }) {
-  const hs = [10, 16, 22, 14, 18];
-  return (
-    <span className="inline-flex items-end gap-[3px]" aria-hidden>
-      {Array.from({ length: n }).map((_, i) => (
-        <span key={i} style={{ height: hs[i % hs.length] }} className="w-[3px] rounded-full bg-accent" />
-      ))}
-    </span>
-  );
+// Sends a signed-in user to the right place based on their role.
+function destFor(role) {
+  if (role === "admin") return "/admin";
+  if (role === "hr") return "/hr";
+  return "/candidate"; // candidates have no special role
 }
 
 export default function LoginPage() {
@@ -24,29 +20,31 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
-  const [intendedRole, setIntendedRole] = useState(null); // set when redirected from a protected area
 
+  // If already signed in (e.g. just after confirming an email), go straight to the right area.
   useEffect(() => {
-    try { setIntendedRole(new URLSearchParams(window.location.search).get("role")); } catch {}
-  }, []);
-
-  const areaName = intendedRole === "admin" ? "admin" : intendedRole === "hr" ? "recruiter" : null;
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) router.replace(destFor(session.user?.app_metadata?.role));
+    })();
+  }, [router]);
 
   async function onSubmit(e) {
     e.preventDefault();
     setErr("");
     setBusy(true);
     const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-    if (error) { setErr("Invalid email or password."); setBusy(false); return; }
-    const role = data.user?.app_metadata?.role;
-    // Came from a specific area but this account is a different role -> reject (don't cross over).
-    if (intendedRole && role !== intendedRole) {
-      await supabase.auth.signOut();
-      setErr(`This account doesn't have ${areaName} access. Please sign in with a ${areaName} account.`);
+    if (error) {
       setBusy(false);
+      if (/confirm/i.test(error.message || "")) {
+        setErr("Please verify your email first — check your inbox (and spam) for the confirmation link.");
+      } else {
+        setErr("Invalid email or password.");
+      }
       return;
     }
-    router.replace(role === "admin" ? "/admin" : "/hr");
+    // One login for everyone — route by the account's role.
+    router.replace(destFor(data.user?.app_metadata?.role));
   }
 
   return (
@@ -66,13 +64,13 @@ export default function LoginPage() {
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-6 pb-16">
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="glass rounded-3xl p-8">
           <h1 className="font-serif text-3xl font-semibold text-ink">Sign in</h1>
-          <p className="mt-2 text-muted">{areaName ? `Sign in to the ${areaName} area.` : "For recruiters and administrators."}</p>
+          <p className="mt-2 text-muted">Candidates, recruiters, and admins sign in here.</p>
 
           <form onSubmit={onSubmit} className="mt-7 space-y-4">
             <div>
               <label className="mb-1 block text-sm font-medium text-ink">Email</label>
               <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username"
-                className="w-full rounded-lg border border-line bg-card2 px-3 py-2.5 text-ink outline-none transition focus:border-accent" placeholder="you@company.com" />
+                className="w-full rounded-lg border border-line bg-card2 px-3 py-2.5 text-ink outline-none transition focus:border-accent" placeholder="you@email.com" />
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-ink">Password</label>
@@ -86,6 +84,11 @@ export default function LoginPage() {
               <Link href="/forgot-password" className="text-sm text-accent transition hover:brightness-110">Forgot your password?</Link>
             </div>
           </form>
+
+          <p className="mt-6 border-t border-line pt-5 text-center text-sm text-muted">
+            New candidate?{" "}
+            <Link href="/signup" className="font-medium text-accent transition hover:brightness-110">Create an account</Link>
+          </p>
         </motion.div>
       </div>
     </main>

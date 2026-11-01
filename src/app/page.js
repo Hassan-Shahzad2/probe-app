@@ -566,9 +566,9 @@ export default function Home() {
         <Logo />
         <nav className="flex items-center gap-4 text-sm text-muted sm:gap-6">
           <a href="#how" className="hidden transition hover:text-ink sm:inline">How it works</a>
-          <Link href="/hr" className="hidden transition hover:text-ink sm:inline">For recruiters</Link>
+          <Link href="/login" className="hidden transition hover:text-ink sm:inline">Sign in</Link>
           <ThemeToggle />
-          <Link href="/candidate" className="rounded-full bg-accent px-5 py-2.5 font-semibold text-accent-ink shadow-lg shadow-accent/25 transition hover:brightness-110">
+          <Link href="/signup" className="rounded-full bg-accent px-5 py-2.5 font-semibold text-accent-ink shadow-lg shadow-accent/25 transition hover:brightness-110">
             Start
           </Link>
         </nav>
@@ -589,11 +589,11 @@ export default function Home() {
 
           <motion.div variants={fadeUp} initial="hidden" animate="show" custom={0.24}
             className="mt-9 flex flex-wrap items-center gap-3">
-            <Link href="/candidate" className="rounded-full bg-accent px-7 py-3.5 font-semibold text-accent-ink shadow-xl shadow-accent/30 transition hover:-translate-y-0.5 hover:brightness-110">
+            <Link href="/signup" className="rounded-full bg-accent px-7 py-3.5 font-semibold text-accent-ink shadow-xl shadow-accent/30 transition hover:-translate-y-0.5 hover:brightness-110">
               Start an interview
             </Link>
-            <Link href="/hr" className="glass rounded-full px-7 py-3.5 font-semibold text-ink transition hover:-translate-y-0.5">
-              Recruiter console
+            <Link href="/login" className="glass rounded-full px-7 py-3.5 font-semibold text-ink transition hover:-translate-y-0.5">
+              Sign in
             </Link>
           </motion.div>
 
@@ -666,30 +666,24 @@ export default function Home() {
         </div>
       </section>
 
-      {/* access */}
+      {/* get started */}
       <section className="mx-auto max-w-6xl px-5 pb-24 pt-6 sm:px-6">
-        <div className="grid gap-4 sm:gap-5 md:grid-cols-3">
-          {[
-            { t: "Candidate", d: "Take your interview.", href: "/candidate", icon: "mic" },
-            { t: "Recruiter", d: "Review scored candidates.", href: "/hr", icon: "chart" },
-            { t: "Admin", d: "Manage roles and questions.", href: "/admin", icon: "cog" },
-          ].map((d) => (
-            <motion.div key={d.t} whileHover={reduce ? {} : { y: -4 }} transition={{ duration: 0.2 }}>
-              <Link href={d.href} className="glass flex items-center gap-4 rounded-2xl p-5">
-                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent">
-                  <Icon name={d.icon} />
-                </span>
-                <span>
-                  <span className="block font-serif text-xl font-medium text-ink">{d.t}</span>
-                  <span className="block text-sm text-muted">{d.d}</span>
-                </span>
-              </Link>
-            </motion.div>
-          ))}
+        <div className="glass mx-auto max-w-2xl rounded-3xl p-8 text-center sm:p-10">
+          <h2 className="font-serif text-[clamp(26px,3vw,36px)] font-medium text-ink">Ready to begin?</h2>
+          <p className="mx-auto mt-3 max-w-md text-muted">Create a candidate account to take your interview — or sign in to continue.</p>
+          <div className="mt-7 flex flex-wrap justify-center gap-3">
+            <Link href="/signup" className="rounded-full bg-accent px-7 py-3.5 font-semibold text-accent-ink shadow-lg shadow-accent/25 transition hover:-translate-y-0.5 hover:brightness-110">
+              Create account
+            </Link>
+            <Link href="/login" className="glass rounded-full px-7 py-3.5 font-semibold text-ink transition hover:-translate-y-0.5">
+              Sign in
+            </Link>
+          </div>
+          <p className="mt-5 text-sm text-faint">Recruiters and admins sign in with their existing accounts.</p>
         </div>
       </section>
 
-      <footer className="mx-auto flex max-w-6xl flex-col items-center gap-2 px-5 py-8 text-center text-sm text-faint sm:px-6">
+      <footer className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-5 py-8 text-sm text-faint sm:px-6">
         <Logo />
         <span>AI interview screener · Built by Muhammad Hassan Shahzad</span>
       </footer>

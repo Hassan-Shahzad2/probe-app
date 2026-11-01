@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "motion/react";
 import { supabase } from "@/lib/supabaseClient";
@@ -62,6 +63,7 @@ function PermRow({ label, desc, ok, onGrant }) {
 
 /* ---------- page ---------- */
 export default function CandidatePage() {
+  const router = useRouter();
   const [phase, setPhase] = useState("form"); // form | permissions | interview | done
   const [jobs, setJobs] = useState([]);
   const [jobsErr, setJobsErr] = useState("");
@@ -127,6 +129,11 @@ export default function CandidatePage() {
   const screenAudioCtxRef = useRef(null);
 
   function setMicState(v) { micRef.current = v; setMic(v); }
+
+  async function logout() {
+    try { await supabase.auth.signOut(); } catch {}
+    router.replace("/");
+  }
 
   useEffect(() => {
     (async () => {
@@ -586,8 +593,8 @@ export default function CandidatePage() {
   async function submitCV(e) {
     e.preventDefault();
     const file = fileRef.current && fileRef.current.files && fileRef.current.files[0];
-    if (!name.trim() || !email.trim() || !file) {
-      setFormErr("Please add your name, email, and attach a PDF.");
+    if (!file) {
+      setFormErr("Please attach your CV (PDF).");
       return;
     }
     if (process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY && !captchaToken) {
@@ -602,6 +609,21 @@ export default function CandidatePage() {
     timeLimitRef.current = job && job.time_limit_minutes ? Number(job.time_limit_minutes) : null;
     setUploading(true);
     setFormErr("");
+
+    // Block a second application for the same role.
+    try {
+      const chk = await fetch("/api/check-applied", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, job_id: jobId }),
+      });
+      const cd = await chk.json();
+      if (cd && cd.applied) {
+        setFormErr("You've already applied for this role.");
+        setUploading(false);
+        return;
+      }
+    } catch {}
 
     const fd = new FormData();
     fd.append("data", file);
@@ -736,6 +758,25 @@ export default function CandidatePage() {
     setEnvChecked(true);
   }, []);
 
+  // Require a signed-in account before the interview; route privileged users to their own area.
+  const [authChecked, setAuthChecked] = useState(false);
+  useEffect(() => {
+    if (!envChecked || laptopOnly) return; // on mobile we show the laptop screen instead
+    let active = true;
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!active) return;
+      if (!session) { router.replace("/login"); return; }
+      const role = session.user?.app_metadata?.role;
+      if (role === "admin") { router.replace("/admin"); return; }
+      if (role === "hr") { router.replace("/hr"); return; }
+      setName(session.user.user_metadata?.full_name || "");
+      setEmail(session.user.email || "");
+      setAuthChecked(true);
+    })();
+    return () => { active = false; };
+  }, [envChecked, laptopOnly, router]);
+
   if (envChecked && laptopOnly) {
     return (
       <main className="relative flex min-h-screen flex-col">
@@ -764,6 +805,14 @@ export default function CandidatePage() {
     );
   }
 
+  if (!authChecked) {
+    return (
+      <main className="grid min-h-screen place-items-center">
+        <p className="text-muted">Checking your account…</p>
+      </main>
+    );
+  }
+
   return (
     <main className="relative flex min-h-screen flex-col">
       <header className="mx-auto flex w-full max-w-4xl items-center justify-between px-5 py-6 sm:px-6">
@@ -775,7 +824,7 @@ export default function CandidatePage() {
           </svg>
           <b className="font-serif text-[22px] font-semibold tracking-tight text-ink">Probe</b>
         </Link>
-        <Link href="/" className="text-sm text-muted transition hover:text-ink">Exit</Link>
+        <button onClick={logout} className="text-sm text-muted transition hover:text-ink">Sign out</button>
       </header>
 
       <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col justify-center px-6 pb-16">
@@ -785,13 +834,8 @@ export default function CandidatePage() {
             <p className="mt-2 text-muted">A short voice interview, scored against the role. Have your CV ready as a PDF.</p>
 
             <form onSubmit={submitCV} className="mt-7 space-y-4">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-ink">Full name</label>
-                <input value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded-lg border border-line bg-card2 px-3 py-2.5 text-ink outline-none transition focus:border-accent" placeholder="Your name" />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-ink">Email</label>
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full rounded-lg border border-line bg-card2 px-3 py-2.5 text-ink outline-none transition focus:border-accent" placeholder="you@email.com" />
+              <div className="rounded-lg border border-line bg-card2 px-3 py-2.5 text-sm text-muted">
+                Signed in as <b className="text-ink">{email || "your account"}</b>
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-ink">Role</label>
