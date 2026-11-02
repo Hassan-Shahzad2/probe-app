@@ -6,6 +6,7 @@ import Link from "next/link";
 import { motion } from "motion/react";
 import { supabase } from "@/lib/supabaseClient";
 import { useRequireRole } from "@/lib/useAuth";
+import PasswordInput from "@/components/PasswordInput";
 
 const PASS_MARK = 70;
 
@@ -111,10 +112,33 @@ function Recording({ interviewId }) {
   );
 }
 
-function CandidateCard({ iv }) {
+// Modal: asks the HR to re-enter their password before a destructive action.
+function PasswordConfirm({ label, note, busy, err, onCancel, onConfirm }) {
+  const [pw, setPw] = useState("");
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={onCancel}>
+      <div className="glass w-full max-w-sm rounded-2xl p-6" onClick={(e) => e.stopPropagation()}>
+        <h3 className="font-serif text-xl font-semibold text-ink">{label}</h3>
+        {note && <p className="mt-2 text-sm text-muted">{note}</p>}
+        <label className="mb-1 mt-4 block text-sm font-medium text-ink">Confirm your password</label>
+        <PasswordInput value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="current-password" placeholder="Your account password" />
+        {err && <p className="mt-2 text-sm text-fail">{err}</p>}
+        <div className="mt-5 flex justify-end gap-3">
+          <button onClick={onCancel} disabled={busy} className="rounded-xl border border-line px-4 py-2 text-sm font-medium text-ink transition hover:border-accent disabled:opacity-60">Cancel</button>
+          <button onClick={() => onConfirm(pw)} disabled={busy || !pw} className="rounded-xl bg-fail px-4 py-2 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-60">
+            {busy ? "Removing…" : "Remove"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CandidateCard({ iv, archived, onRemove, onRestore }) {
   const [open, setOpen] = useState(false);
   const [dl, setDl] = useState(false);
   const [dlErr, setDlErr] = useState("");
+  const [restoring, setRestoring] = useState(false);
   const report = getReport(iv);
   const turns = iv.interview_turns || [];
   const name = iv.candidates?.name || "Unknown candidate";
@@ -157,12 +181,21 @@ function CandidateCard({ iv }) {
     setDl(false);
   }
 
+  async function restore() {
+    setRestoring(true);
+    await onRestore(iv.id);
+    setRestoring(false);
+  }
+
   return (
     <div className="glass overflow-hidden rounded-2xl">
       <button onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-4 p-5 text-left">
         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-accent/15 text-sm font-semibold text-accent">{initials}</span>
         <div className="min-w-0 flex-1">
-          <div className="truncate font-semibold text-ink">{name}</div>
+          <div className="flex items-center gap-2">
+            <span className="truncate font-semibold text-ink">{name}</span>
+            {archived && <span className="shrink-0 rounded-md bg-line px-1.5 py-0.5 text-[10px] font-medium text-faint">Archived</span>}
+          </div>
           <div className="truncate text-sm text-muted">{email} · {job}</div>
         </div>
         <div className="text-right">
@@ -198,16 +231,29 @@ function CandidateCard({ iv }) {
             </div>
           )}
 
-          {hasFile && (
-            <div className="mt-3 flex flex-wrap items-center gap-3">
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            {hasFile && (
               <button onClick={downloadCV} disabled={dl}
                 className="inline-flex items-center gap-2 rounded-lg border border-line bg-card2 px-3 py-2 text-sm font-medium text-ink transition hover:border-accent disabled:opacity-60">
                 <svg width="16" height="16" viewBox="0 0 24 24" {...svg}><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" /></svg>
                 {dl ? "Preparing…" : "Download CV (PDF)"}
               </button>
-              {dlErr && <span className="text-sm text-fail">{dlErr}</span>}
-            </div>
-          )}
+            )}
+            {archived ? (
+              <button onClick={restore} disabled={restoring}
+                className="inline-flex items-center gap-2 rounded-lg border border-line bg-card2 px-3 py-2 text-sm font-medium text-ink transition hover:border-accent disabled:opacity-60">
+                <svg width="16" height="16" viewBox="0 0 24 24" {...svg}><path d="M3 12a9 9 0 1 0 3-6.7M3 4v4h4" /></svg>
+                {restoring ? "Restoring…" : "Restore"}
+              </button>
+            ) : (
+              <button onClick={() => onRemove(iv.id, name)}
+                className="inline-flex items-center gap-2 rounded-lg border border-fail/40 px-3 py-2 text-sm font-medium text-fail transition hover:bg-fail/10">
+                <svg width="16" height="16" viewBox="0 0 24 24" {...svg}><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" /></svg>
+                Remove application
+              </button>
+            )}
+            {dlErr && <span className="text-sm text-fail">{dlErr}</span>}
+          </div>
 
           {cv && (
             <details className="mt-3 rounded-xl border border-line bg-card2 p-4">
@@ -246,6 +292,7 @@ export default function HRPage() {
   const [err, setErr] = useState("");
   const [filter, setFilter] = useState("all");
   const [loading, setLoading] = useState(true);
+  const [confirm, setConfirm] = useState({ open: false, ids: [], label: "", note: "", busy: false, err: "" });
   const router = useRouter();
   const auth = useRequireRole("hr");
 
@@ -274,8 +321,11 @@ export default function HRPage() {
 
   useEffect(() => { load(); }, []);
 
+  const active = useMemo(() => (data || []).filter((iv) => !iv.archived_at), [data]);
+  const archived = useMemo(() => (data || []).filter((iv) => iv.archived_at), [data]);
+
   const stats = useMemo(() => {
-    const d = data || [];
+    const d = active;
     let pass = 0, fail = 0, pend = 0;
     let st = 0, sc = 0, sp = 0, rc = 0;
     for (const iv of d) {
@@ -290,10 +340,18 @@ export default function HRPage() {
     const rate = (pass + fail) ? Math.round((pass / (pass + fail)) * 100) : 0;
     const avg = rc ? { tech: st / rc, comm: sc / rc, ps: sp / rc } : { tech: 0, comm: 0, ps: 0 };
     return { total: d.length, pass, fail, pend, rate, avg, rc };
-  }, [data]);
+  }, [active]);
+
+  // All active, not-qualified applications — the targets for "clear all".
+  const notQualifiedIds = useMemo(() => active.filter((iv) => {
+    const rep = getReport(iv);
+    const o = rep ? num(rep.overall_score) : null;
+    return o != null && o < PASS_MARK;
+  }).map((iv) => iv.id), [active]);
 
   const shown = useMemo(() => {
-    const d = data || [];
+    if (filter === "archived") return archived;
+    const d = active;
     if (filter === "all") return d;
     return d.filter((iv) => {
       const rep = getReport(iv);
@@ -303,14 +361,56 @@ export default function HRPage() {
       if (filter === "failed") return overall != null && overall < PASS_MARK;
       return true;
     });
-  }, [data, filter]);
+  }, [active, archived, filter]);
 
   const tabs = [
     ["all", "All", stats.total],
     ["qualified", "Qualified", stats.pass],
     ["failed", "Not qualified", stats.fail],
     ["pending", "In progress", stats.pend],
+    ["archived", "Archived", archived.length],
   ];
+
+  async function token() {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session && session.access_token;
+  }
+
+  // Open the password modal for a single or bulk removal.
+  function askRemove(ids, label, note) {
+    setConfirm({ open: true, ids, label, note, busy: false, err: "" });
+  }
+
+  async function doArchive(pw) {
+    setConfirm((c) => ({ ...c, busy: true, err: "" }));
+    try {
+      const r = await fetch("/api/archive", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ access_token: await token(), password: pw, interview_ids: confirm.ids, action: "archive" }),
+      });
+      const d = await r.json();
+      if (!r.ok || !d.ok) {
+        setConfirm((c) => ({ ...c, busy: false, err: d.error || "Could not remove." }));
+        return;
+      }
+      setConfirm({ open: false, ids: [], label: "", note: "", busy: false, err: "" });
+      await load();
+    } catch {
+      setConfirm((c) => ({ ...c, busy: false, err: "Could not remove." }));
+    }
+  }
+
+  async function restoreOne(id) {
+    try {
+      const r = await fetch("/api/archive", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ access_token: await token(), interview_ids: [id], action: "restore" }),
+      });
+      if (r.ok) await load();
+    } catch {}
+  }
 
   if (auth.status === "denied") {
     return (
@@ -337,6 +437,17 @@ export default function HRPage() {
 
   return (
     <main className="relative flex min-h-screen flex-col">
+      {confirm.open && (
+        <PasswordConfirm
+          label={confirm.label}
+          note={confirm.note}
+          busy={confirm.busy}
+          err={confirm.err}
+          onCancel={() => setConfirm({ open: false, ids: [], label: "", note: "", busy: false, err: "" })}
+          onConfirm={doArchive}
+        />
+      )}
+
       <header className="mx-auto flex w-full max-w-5xl items-center justify-between px-6 py-6">
         <Link href="/" className="inline-flex items-center gap-2.5">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden className="text-accent">
@@ -389,20 +500,46 @@ export default function HRPage() {
               </div>
             )}
 
-            <div className="mt-8 flex flex-wrap gap-2">
+            <div className="mt-8 flex flex-wrap items-center gap-2">
               {tabs.map(([key, label, count]) => (
                 <button key={key} onClick={() => setFilter(key)}
                   className={`rounded-full px-4 py-2 text-sm font-medium transition ${filter === key ? "bg-accent text-accent-ink" : "glass text-muted hover:text-ink"}`}>
                   {label} <span className="opacity-70">{count}</span>
                 </button>
               ))}
+              {filter !== "archived" && notQualifiedIds.length > 0 && (
+                <button
+                  onClick={() => askRemove(
+                    notQualifiedIds,
+                    `Remove ${notQualifiedIds.length} not-qualified application${notQualifiedIds.length === 1 ? "" : "s"}?`,
+                    "They move to the Archived tab and can be restored. After 30 days they are permanently deleted.",
+                  )}
+                  className="ml-auto inline-flex items-center gap-2 rounded-full border border-fail/40 px-4 py-2 text-sm font-medium text-fail transition hover:bg-fail/10">
+                  <svg width="16" height="16" viewBox="0 0 24 24" {...svg}><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" /></svg>
+                  Clear all not-qualified ({notQualifiedIds.length})
+                </button>
+              )}
             </div>
+
+            {filter === "archived" && (
+              <p className="mt-4 text-sm text-muted">Archived applications are hidden from the main board and permanently deleted 30 days after removal. Restore any time before then.</p>
+            )}
 
             <div className="mt-5 space-y-3">
               {shown.length === 0 ? (
-                <div className="glass rounded-2xl p-10 text-center text-muted">No candidates in this view yet.</div>
+                <div className="glass rounded-2xl p-10 text-center text-muted">
+                  {filter === "archived" ? "Nothing archived." : "No candidates in this view yet."}
+                </div>
               ) : (
-                shown.map((iv, i) => <CandidateCard key={iv.id || i} iv={iv} />)
+                shown.map((iv, i) => (
+                  <CandidateCard
+                    key={iv.id || i}
+                    iv={iv}
+                    archived={filter === "archived"}
+                    onRemove={(id, name) => askRemove([id], `Remove ${name}'s application?`, "It moves to the Archived tab and can be restored. After 30 days it is permanently deleted.")}
+                    onRestore={restoreOne}
+                  />
+                ))
               )}
             </div>
           </>
