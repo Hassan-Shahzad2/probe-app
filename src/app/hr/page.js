@@ -113,15 +113,49 @@ function Recording({ interviewId }) {
 
 function CandidateCard({ iv }) {
   const [open, setOpen] = useState(false);
+  const [dl, setDl] = useState(false);
+  const [dlErr, setDlErr] = useState("");
   const report = getReport(iv);
   const turns = iv.interview_turns || [];
   const name = iv.candidates?.name || "Unknown candidate";
   const email = iv.candidates?.email || "";
   const job = iv.jobs?.title || "General position";
   const cv = iv.candidates?.resume_text || "";
+  const candId = iv.candidates?.id || null;
+  const resumeUrl = iv.candidates?.resume_url || "";
+  // A real stored file exists only for uploads made after we started saving the
+  // PDF. Older rows carry the placeholder "uploaded" (or nothing) — no file.
+  const hasFile = !!candId && !!resumeUrl && resumeUrl !== "uploaded";
   const overall = report ? num(report.overall_score) : null;
   const good = overall != null && overall >= PASS_MARK;
   const initials = name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+
+  async function downloadCV() {
+    if (!candId) return;
+    setDl(true);
+    setDlErr("");
+    try {
+      const r = await fetch("/api/resume-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ candidate_id: candId, filename: name }),
+      });
+      const d = await r.json();
+      if (d && d.url) {
+        const a = document.createElement("a");
+        a.href = d.url;
+        a.rel = "noopener";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } else {
+        setDlErr(d && d.error ? d.error : "Could not download the CV.");
+      }
+    } catch {
+      setDlErr("Could not download the CV.");
+    }
+    setDl(false);
+  }
 
   return (
     <div className="glass overflow-hidden rounded-2xl">
@@ -161,6 +195,17 @@ function CandidateCard({ iv }) {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {hasFile && (
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <button onClick={downloadCV} disabled={dl}
+                className="inline-flex items-center gap-2 rounded-lg border border-line bg-card2 px-3 py-2 text-sm font-medium text-ink transition hover:border-accent disabled:opacity-60">
+                <svg width="16" height="16" viewBox="0 0 24 24" {...svg}><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" /></svg>
+                {dl ? "Preparing…" : "Download CV (PDF)"}
+              </button>
+              {dlErr && <span className="text-sm text-fail">{dlErr}</span>}
             </div>
           )}
 
