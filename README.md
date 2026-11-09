@@ -84,35 +84,6 @@ Layered defenses, each for a different threat:
 
 ---
 
-## Running locally
-
-> The frontend runs on Next.js. The AI engine runs in **n8n** (self-hosted or n8n Cloud); the app reaches it via the `N8N_WEBHOOK_BASE` URL.
-
-```bash
-npm install
-npm run dev     # http://localhost:3000
-```
-
-Create a `.env.local` with your own credentials (never commit this file):
-
-```bash
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_KEY=
-
-OPENAI_API_KEY=
-
-UPSTASH_REDIS_REST_URL=
-UPSTASH_REDIS_REST_TOKEN=
-
-NEXT_PUBLIC_TURNSTILE_SITE_KEY=
-TURNSTILE_SECRET_KEY=
-
-N8N_WEBHOOK_BASE=
-```
-
----
-
 ## Author
 
 **Muhammad Hassan Shahzad** — built as the capstone project of a 4-week AI Engineering & Automation internship at The Techzeen.
